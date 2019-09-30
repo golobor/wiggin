@@ -1,3 +1,4 @@
+import looplib.looptools
 import numpy as np
 
 def norm(vector):
@@ -236,15 +237,16 @@ def make_helical_loopbrush(
     
     '''
     coords = np.zeros(shape=(L,3))
-    loopstarts = np.array([min(i) for i in loops])
-    loopends = np.array([max(i) for i in loops])
+    root_loops = loops[looplib.looptools.get_roots(loops)]
+    loopstarts = np.array([min(i) for i in root_loops])
+    loopends = np.array([max(i) for i in root_loops])
     looplens = loopends - loopstarts
 
-    if len(loops)>0:
+    if len(root_loops)>0:
         bbidxs = np.concatenate(
             [np.arange(0,loopstarts[0]+1)]
             + [np.arange(loopends[i],loopstarts[i+1]+1)
-               for i in range(len(loops)-1)]
+               for i in range(len(root_loops)-1)]
             + [np.arange(loopends[-1], L)])
     else:
         bbidxs = range(L)
@@ -263,13 +265,13 @@ def make_helical_loopbrush(
     coords[bbidxs] += (
         np.random.random(bb_len * 3).reshape(bb_len, 3) * bb_random_shift)
 
-    for i in range(len(loops)):
+    for i in range(len(root_loops)):
         if random_loop_orientations:
-            bb_u = coords[loops[i][1]] - coords[loops[i][0]]
+            bb_u = coords[root_loops[i][1]] - coords[root_loops[i][0]]
             u = np.cross(bb_u, bb_u+(np.random.random(3)*0.2-0.1))
             u[2] = 0
         else:
-            u = (coords[loops[i][0]] + coords[loops[i][1]])/2
+            u = (coords[root_loops[i][0]] + coords[root_loops[i][1]])/2
             u[2] = 0
 
         u /= (u**2).sum()**0.5

@@ -52,7 +52,7 @@ class GenerateTwoLayerLoops(SimulationAction):
         outer_loop_size = 200 * 4,
         inner_loop_spacing = 1,
         outer_loop_spacing = 1,
-        inner_outer_spacing = 1,
+        outer_inner_offset= 1,
         inner_loop_gamma_k = 1,
         outer_loop_gamma_k = 1,
     )
@@ -75,18 +75,24 @@ class GenerateTwoLayerLoops(SimulationAction):
         else:
             N = shared_config['N']
                
-        outer_loops, inner_loops = two_layer_gamma_loop_array(N,
-                          outer_loop_size, outer_gamma_k, outer_loop_spacing,
-                          inner_loop_size, inner_gamma_k, inner_loop_spacing,
-                          outer_inner_offset=1)
-        loops = sorted(outer_loops+inner_loops, key=lambda x: x[0])
+        outer_loops, inner_loops = looplib.random_loop_arrays.two_layer_gamma_loop_array(
+            N,
+            action_config['outer_loop_size'], 
+            action_config['outer_loop_gamma_k'], 
+            action_config['outer_loop_spacing'],
+            action_config['inner_loop_size'], 
+            action_config['inner_loop_gamma_k'], 
+            action_config['inner_loop_spacing'],
+            action_config['outer_inner_offset'])
+        loops = np.vstack([outer_loops, inner_loops])
+        loops.sort()
 
         shared_config_added_data['loops'] = loops
         action_config['inner_loops'] = inner_loops
         action_config['outer_loops'] = outer_loops
 
         shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
-                outer_loops, N)
+                outer_loops, N=N)
 
         return shared_config_added_data, action_config
 
