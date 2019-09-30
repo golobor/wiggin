@@ -19,16 +19,16 @@ c = smc.SimulationConstructor()
 
 c.add_action(
     smc.InitializeSimulation(
-        N=2000000,
+        N=20000,
         #platform='CPU'
         GPU='1',
-        #error_tol=0.003,
+        error_tol=0.001,
         collision_rate=0.003,
     ),
 )
 
 c.add_action(
-    msmc.GenerateSingleLayerLoops(loop_size=4000),
+    msmc.GenerateSingleLayerLoops(loop_size=400),
 )
 
 c.add_action(
@@ -45,13 +45,13 @@ c.add_action(
 
 c.add_action(
     smc.AddChains(
-        wiggle_dist=0.025,
-        repulsion_e=10),
+        wiggle_dist=0.25,
+        repulsion_e=1.5),
 )
 
 c.add_action(
     msmc.AddLoops(
-        wiggle_dist=0.025,
+        wiggle_dist=0.25,
     ),
 )
 
@@ -59,16 +59,16 @@ c.add_action(
     msmc.AddTipsTethering(),
 )
 
-#c.add_action(
-#    smc.LocalEnergyMinimization()
-#)
+c.add_action(
+    smc.LocalEnergyMinimization()
+)
 
 c.add_action(
     msmc.AddDynamicCylinderCompression(
     powerlaw=2,
     initial_block = 1,
-    final_block = 500,
-    final_axial_compression = 3
+    final_block = 50,
+    final_axial_compression = 4
     )
 )
 

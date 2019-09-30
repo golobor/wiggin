@@ -39,8 +39,54 @@ class GenerateSingleLayerLoops(SimulationAction):
                 action_config['loop_spacing'])
         )
 
-        #shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
-        #        action_config['loops'], N)
+        shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
+                shared_config_added_data['loops'], N=N)
+
+        return shared_config_added_data, action_config
+
+
+class GenerateTwoLayerLoops(SimulationAction):
+    stage = 'init'
+    _default_params = AttrDict(
+        inner_loop_size = 200,
+        outer_loop_size = 200 * 4,
+        inner_loop_spacing = 1,
+        outer_loop_spacing = 1,
+        inner_outer_spacing = 1,
+        inner_loop_gamma_k = 1,
+        outer_loop_gamma_k = 1,
+    )
+
+
+    def configure(self, shared_config, action_configs):
+        import looplib
+        import looplib.looptools
+        import looplib.random_loop_arrays
+
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        if 'outer_loop_n' in self.params:
+            N = self.params['outer_loop_n'] * action_config['outer_loop_size']
+            shared_config_added_data['N'] = N
+        elif 'inner_loop_n' in self.params:
+            N = self.params['inner_loop_n'] * action_config['inner_loop_size']
+            shared_config_added_data['N'] = N
+        else:
+            N = shared_config['N']
+               
+        outer_loops, inner_loops = two_layer_gamma_loop_array(N,
+                          outer_loop_size, outer_gamma_k, outer_loop_spacing,
+                          inner_loop_size, inner_gamma_k, inner_loop_spacing,
+                          outer_inner_offset=1)
+        loops = sorted(outer_loops+inner_loops, key=lambda x: x[0])
+
+        shared_config_added_data['loops'] = loops
+        action_config['inner_loops'] = inner_loops
+        action_config['outer_loops'] = outer_loops
+
+        shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
+                outer_loops, N)
 
         return shared_config_added_data, action_config
 
@@ -57,8 +103,8 @@ class AddLoops(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forces.harmonicBonds(
+        sim.add_force(
+            forces.harmonic_bonds(
                 sim_object=sim,
                 bonds=shared_config['loops'],
                 bondWiggleDistance=self_conf.wiggle_dist,
@@ -97,8 +143,8 @@ class AddInitConfCylindricalConfinement(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forces.cylindricalConfinement(
+        sim.add_force(
+            forces.cylindrical_confinement(
                 sim_object=sim,
                 r=self_conf.r_max,
                 top=self_conf.z_max,
@@ -124,8 +170,8 @@ class AddTipsTethering(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forces.tetherParticles(
+        sim.add_force(
+            forces.tether_particles(
                 sim_object=sim, 
                 particles=self_conf.particles, 
                 k=self_conf.k, 
@@ -208,7 +254,7 @@ class AddDynamicCylinderCompression(SimulationAction):
                   if self_conf[f'final_{k}'] is not None]
 
             cur_vals = {
-                k:sim.context.getParameter(f'CylindricalConfinement_{k}')
+                k:sim.context.getParameter(f'cylindrical_confinement_{k}')
                 for k in ks
             }
 
@@ -226,46 +272,18 @@ class AddDynamicCylinderCompression(SimulationAction):
 
             for k in ks:
                 sim.context.setParameter(
-                    f'CylindricalConfinement_{k}', new_vals[k] * sim.nm)
+                    f'cylindrical_confinement_{k}', new_vals[k] * sim.nm)
 
             if 'AddTipsTethering' in action_configs:
                 if 'top' in ks and 'bottom' in ks:
-                    sim.forceDict['Tethers'].setParticleParameters(
+                    sim.force_dict['Tethers'].setParticleParameters(
                         0, 0, [0, 0, new_vals['bottom']])
-                    sim.forceDict['Tethers'].setParticleParameters(
+                    sim.force_dict['Tethers'].setParticleParameters(
                         1, sim.N-1, [0, 0, new_vals['top']])
-                    sim.forceDict['Tethers'].updateParametersInContext(
+                    sim.force_dict['Tethers'].updateParametersInContext(
                         sim.context)
 
         return sim
-
-
-#class AddTwoLayerLoops(SimulationAction):
-#
-#    _default_params = AttrDict(
-#        inner_loop_spacing = 1,
-#        inner_loop_size = 200,
-#        outer_loop_size = 200 * 4,
-#        inner_loop_gamma_k = 1,
-#        outer_loop_gamma_k = 1,
-#        outer_loop_spacing = 1,
-#    )
-#
-#
-#    def configure(self, shared_config, action_configs):
-#        import looplib
-#        shared_config_added_data, action_config = super().configure(
-#            shared_config, action_configs)
-#
-#        self['OUTER_LOOPS'] = [i for i in itertools.compress(
-#                                  self['LOOPS'],
-#                                  looptools.get_roots(self['LOOPS']))]
-#
-#        self['NUM_LOOPS'] = len(self['LOOPS'])
-#        self['INNER_LOOPS'] = [i for i in self['LOOPS'] if i not in self['OUTER_LOOPS']]
-#
-#
-#        return shared_config_added_data, action_config
 
 
 class GenerateLoopBrushInitialConformation(SimulationAction):

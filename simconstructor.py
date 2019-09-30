@@ -133,7 +133,7 @@ class InitializeSimulation(SimulationAction):
         collision_rate = 0.01,
         temperature = 300,
         timestep = 1.0,
-        maxEk=100,
+        max_Ek=100,
     )
 
 
@@ -160,7 +160,7 @@ class InitializeSimulation(SimulationAction):
             collision_rate=self_conf.collision_rate,
             mass=self_conf.mass,
             N=shared_config.N,
-            maxEk=self_conf.maxEk
+            max_Ek=self_conf.max_Ek
         )  # timestep not necessary for variableLangevin
 
         return sim
@@ -181,7 +181,7 @@ class BlockStep(SimulationAction):
         if (sim.step / self_conf.block_size >= self_conf.num_blocks):
             return None
         else:
-            sim.doBlock(self_conf.block_size)  
+            sim.do_block(self_conf.block_size)  
             return sim
 
 
@@ -196,7 +196,7 @@ class LocalEnergyMinimization(SimulationAction):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
-        sim.localEnergyMinimization(
+        sim.local_energy_minimization(
                 maxIterations=self_conf.max_iterations,
                 tolerance=self_conf.tolerance
         )
@@ -220,29 +220,29 @@ class AddChains(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forcekits.polymerChains(
+        sim.add_force(
+            forcekits.polymer_chains(
                 sim,
                 chains=self_conf.chains,
-                bondForceFunc=forces.harmonicBonds,
-                bondForceKwargs={
+                bond_force_func=forces.harmonic_bonds,
+                bond_force_kwargs={
                     'bondLength': self_conf.bond_length,
                     'bondWiggleDistance': self_conf.wiggle_dist,
                 },
 
-                angleForceFunc=(
+                angle_force_func=(
                     None if self_conf.stiffness_k is None 
-                    else forces.angleForce ),
-                angleForceKwargs={
+                    else forces.angle_force),
+                angle_force_kwargs={
                     'k': self_conf.stiffness_k 
                 },
 
-                nonbondedForceFunc=forces.polynomialRepulsiveForce,
-                nonbondedForceKwargs={
+                nonbonded_force_func=forces.polynomial_repulsive,
+                nonbonded_force_kwargs={
                     'trunc': self_conf.repulsion_e 
                 },
 
-                exceptBonds=self_conf.except_bonds
+                except_bonds=self_conf.except_bonds
             )
         )
 
@@ -285,8 +285,8 @@ class CrosslinkParallelChains(SimulationAction):
             for chain1, chain2 in action_config['chains']
         ])
 
-        sim.addForce(
-            forces.harmonicBonds(
+        sim.add_force(
+            forces.harmonic_bonds(
                 sim,
                 bonds=bonds,
                 bondLength= self_conf.bond_length,
@@ -305,7 +305,7 @@ class SetInitialConformation(SimulationAction):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
-        sim.setData(shared_config.initial_conformation)
+        sim.set_data(shared_config.initial_conformation)
 
         return sim
 
@@ -324,8 +324,8 @@ class AddCylindricalConfinement(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forces.cylindricalConfinement(
+        sim.add_force(
+            forces.cylindrical_confinement(
                 sim_object=sim,
                 r=self_conf.r,
                 top=self_conf.top,
@@ -348,8 +348,8 @@ class AddTethering(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        sim.addForce(
-            forces.tetherParticles(
+        sim.add_force(
+            forces.tether_particles(
                 sim_object=sim, 
                 particles=self_conf.particles, 
                 k=self_conf.k, 
@@ -390,7 +390,7 @@ class SaveConformation(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
         path = os.path.join(shared_config['folder'], f'block.{sim.block}.txt.gz')
-        data = sim.getData()
+        data = sim.get_data()
         np.savetxt(path, data)
 
         return sim

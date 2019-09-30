@@ -240,7 +240,7 @@ def make_helical_loopbrush(
     loopends = np.array([max(i) for i in loops])
     looplens = loopends - loopstarts
 
-    if bool(loops):
+    if len(loops)>0:
         bbidxs = np.concatenate(
             [np.arange(0,loopstarts[0]+1)]
             + [np.arange(loopends[i],loopstarts[i+1]+1)
