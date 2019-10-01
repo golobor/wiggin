@@ -1,8 +1,12 @@
-import socket, copy, itertools, os
+import socket, copy, itertools, os, logging
 
 import numpy as np
 
 from polychrom import simulation, forces, forcekits
+
+
+_VERBOSE = True
+logging.basicConfig(level=logging.INFO)
 
 
 class AttrDict(dict):
@@ -23,6 +27,7 @@ class AttrDict(dict):
 
 class SimulationConstructor:
     def __init__(self):
+        self._actions_config_order = []
         self._actions = {
             'init':[],
             'loop':[]
@@ -46,12 +51,15 @@ class SimulationConstructor:
             raise ValueError(
                 f'Action {action.name} was already added to the constructor!')
         self.action_params[action.name] = copy.deepcopy(action.params)
+
+        self._actions_config_order.append(action)
         self._actions[action.stage].append(action)
 
 
     def configure(self):
-        for action in itertools.chain(
-            self._actions['init'], self._actions['loop']):
+        for action in itertools.chain(self._actions_config_order):
+            if _VERBOSE:
+                logging.info(f'Configuring {action.stage} action {action.name}...')
 
             if action.name in self.action_configs:
                 raise ValueError(
@@ -60,10 +68,11 @@ class SimulationConstructor:
             conf_res = action.configure(
                 self.shared_config,
                 self.action_configs)
+
             assert conf_res is not None, (
                     f'Action {action.name} must return two configs in .configure!')
 
-            shared_config_added_data, action_config  = conf_res
+            shared_config_added_data, action_config = conf_res
             self.shared_config.update(shared_config_added_data) 
             self.action_configs[action.name] = action_config
 
@@ -104,7 +113,7 @@ class SimulationAction:
         shared_config_added_data = AttrDict()
         action_config = AttrDict()
 
-        for k,def_v in self._default_params.items():
+        for k, def_v in self._default_params.items():
             action_config[k] = self.params.get(k, def_v)
 
         return shared_config_added_data, action_config

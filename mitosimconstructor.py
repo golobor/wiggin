@@ -249,11 +249,11 @@ class AddDynamicCylinderCompression(SimulationAction):
 
         return shared_config_added_data, action_config
 
+
     def run(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
-
 
         if self_conf.initial_block <= sim.block <= self_conf.final_block:
             ks = [k for k in ['r', 'top', 'bottom']
