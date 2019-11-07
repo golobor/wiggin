@@ -6,9 +6,9 @@ from polychrom import simulation, forces, forcekits
 from polychrom.forces import openmm, nm
 
 
-from simconstructor import AttrDict, SimulationAction
+from .simconstructor import AttrDict, SimulationAction
 
-import starting_mitotic_conformations
+from . import starting_mitotic_conformations
 
 
 

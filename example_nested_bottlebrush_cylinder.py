@@ -22,7 +22,7 @@ c.add_action(
         N=200*4*500,
         #platform='CPU'
         GPU='1',
-        error_tol=0.001,
+        error_tol=0.01,
         collision_rate=0.003,
 #        max_Ek=1000,
     ),
