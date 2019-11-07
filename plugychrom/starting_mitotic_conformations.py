@@ -1,6 +1,7 @@
 import looplib.looptools
 import numpy as np
 
+
 def norm(vector):
     return np.sqrt(np.dot(vector, vector))
 

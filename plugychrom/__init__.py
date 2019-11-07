@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Pairlib
-~~~~~~~
+Plugychrom
+~~~~~~~~~~
 
-Library of functions for reading, writing and analysing Hi-C pairs.
+PlugyChrom is an experimental high-level modular framework for building polymer simulations.
 
-:copyright: (c) 2019 Massachusetts Institute of Technology
-:author: Mirny Lab
-:license: BSD
+:copyright: (c) 2019 Anton Goloborodko
+:author: Anton Goloborodko
+:license: MIT
 
 """
 import logging
