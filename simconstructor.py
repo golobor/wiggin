@@ -5,6 +5,7 @@ import numpy as np
 from polychrom import simulation, forces, forcekits
 
 
+
 _VERBOSE = True
 logging.basicConfig(level=logging.INFO)
 
@@ -27,11 +28,8 @@ class AttrDict(dict):
 
 class SimulationConstructor:
     def __init__(self):
-        self._actions_config_order = []
-        self._actions = {
-            'init':[],
-            'loop':[]
-        }
+
+        self._actions = []
 
         self._sim = None
         self.shared_config = AttrDict(
@@ -52,14 +50,13 @@ class SimulationConstructor:
                 f'Action {action.name} was already added to the constructor!')
         self.action_params[action.name] = copy.deepcopy(action.params)
 
-        self._actions_config_order.append(action)
-        self._actions[action.stage].append(action)
+        self._actions.append(action)
 
 
     def configure(self):
-        for action in itertools.chain(self._actions_config_order):
+        for action in itertools.chain(self._actions):
             if _VERBOSE:
-                logging.info(f'Configuring {action.stage} action {action.name}...')
+                logging.info(f'Configuring action {action.name}...')
 
             if action.name in self.action_configs:
                 raise ValueError(
@@ -78,21 +75,25 @@ class SimulationConstructor:
 
 
     def run(self):
-        for action in self._actions['init']:
-            self._sim = action.run(
-                    self.shared_config, 
-                    self.action_configs, 
-                    self._sim)
-
-        while self._sim:
-            for action in self._actions['loop']:
-                self._sim = action.run(
+        for action in self._actions:
+            if hasattr(action, 'run_init'):
+                self._sim = action.run_init(
                         self.shared_config, 
                         self.action_configs, 
                         self._sim)
 
-                if self._sim is None:
-                    break
+        while True:
+            for action in self._actions:
+                if hasattr(action, 'run_loop'):
+                    sim = action.run_loop(
+                            self.shared_config, 
+                            self.action_configs, 
+                            self._sim)
+
+                    if sim is None:
+                        break
+                    else:
+                        self._sim = sim
 
 
 class SimulationAction:
@@ -119,17 +120,25 @@ class SimulationAction:
         return shared_config_added_data, action_config
 
 
-    def run(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+    # def run_init(self, shared_config, action_configs, sim):
+    #     # do not use self.params!
+    #     # only use parameters from action_configs[self.name] and shared_config
+    #     self_conf = action_configs[self.name]
 
-        # TODO: rethink updating sim objects
-        return sim
+    # TODO: i always forget to return sim, consider returning an error code?
+    #     return sim
+
+
+    # def run_loop(self, shared_config, action_configs, sim):
+    #     # do not use self.params!
+    #     # only use parameters from action_configs[self.name] and shared_config
+    #     self_conf = action_configs[self.name]
+
+    # TODO: i always forget to return sim, consider returning an error code?
+    #     return sim
 
 
 class InitializeSimulation(SimulationAction):
-    stage = 'init'
 
     _default_params = AttrDict(
         N=None,
@@ -156,7 +165,7 @@ class InitializeSimulation(SimulationAction):
         return shared_config_added_data, action_config
 
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
 
@@ -176,13 +185,12 @@ class InitializeSimulation(SimulationAction):
 
 
 class BlockStep(SimulationAction):
-    stage = 'loop'
     _default_params = AttrDict(
         num_blocks = 100,
         block_size = int(1e4),
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -194,14 +202,14 @@ class BlockStep(SimulationAction):
             return sim
 
 
+
 class LocalEnergyMinimization(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         max_iterations = 1000,
         tolerance = 1,
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -213,7 +221,6 @@ class LocalEnergyMinimization(SimulationAction):
  
 
 class AddChains(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         chains = [(0, None, 0)],
         bond_length = 1.0,
@@ -224,7 +231,7 @@ class AddChains(SimulationAction):
     )
 
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -259,7 +266,7 @@ class AddChains(SimulationAction):
 
 
 class CrosslinkParallelChains(SimulationAction):
-    stage = 'init'
+    
     _default_params = AttrDict(
         chains = None,
         bond_length = 1.0,
@@ -283,7 +290,7 @@ class CrosslinkParallelChains(SimulationAction):
         return shared_config_added_data, action_config
 
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -291,7 +298,7 @@ class CrosslinkParallelChains(SimulationAction):
         bonds = sum([
             zip(range(chain1[0], chain1[1], chain1[2]),
                 range(chain2[0], chain2[1], chain2[2]))
-            for chain1, chain2 in action_config['chains']
+            for chain1, chain2 in self_conf['chains']
         ])
 
         sim.add_force(
@@ -308,9 +315,8 @@ class CrosslinkParallelChains(SimulationAction):
 
 
 class SetInitialConformation(SimulationAction):
-    stage = 'init'
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -320,7 +326,6 @@ class SetInitialConformation(SimulationAction):
 
 
 class AddCylindricalConfinement(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         k=0.5,
         r=None,
@@ -328,7 +333,7 @@ class AddCylindricalConfinement(SimulationAction):
         bottom=None,
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -343,16 +348,43 @@ class AddCylindricalConfinement(SimulationAction):
             )
         )
 
+        return sim
+
+
+class AddSphericalConfinement(SimulationAction):
+    _default_params = AttrDict(
+        k=5,
+        r='density',
+        density= 1. / ((1.5)**3),
+    )
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            forces.spherical_confinement(
+                sim,
+                r=self_conf.r,  # radius... by default uses certain density
+                k=self_conf.k,  # How steep the walls are
+                density=self_conf.density,    # target density, measured in particles
+                                              # per cubic nanometer (bond size is 1 nm)
+                # name='spherical_confinement'
+            )
+        )
+
+        return sim
+
 
 class AddTethering(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         k=15,
         particles=[],
         positions='current',
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -368,7 +400,6 @@ class AddTethering(SimulationAction):
 
 
 class AddGlobalVariableDynamics(SimulationAction):
-    stage = 'loop'
     _default_params = AttrDict(
         variable_name = None,
         final_value = None,
@@ -376,25 +407,24 @@ class AddGlobalVariableDynamics(SimulationAction):
         final_block = None
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if inital_block <= sim.block <= self_conf.final_block:
+        if self_conf.inital_block <= sim.block <= self_conf.final_block:
             cur_val = sim.context.getParameter(self_conf.variable_name)
 
             new_val = cur_val + (
                     (self_conf.final_value - cur_val) 
-                    / (final_block - sim.block + 1)
+                    / (self_conf.final_block - sim.block + 1)
                     )
             sim.context.setParameter(self_conf.variable_name, new_val)
 
 
 class SaveConformation(SimulationAction):
-    stage = 'loop'
 
-    def run(self, shared_config, action_configs, sim):
+    def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]

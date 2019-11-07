@@ -1,16 +1,191 @@
-import os, shelve
+import os, shelve, itertools, logging, collections
 
 import numpy as np
 
 from polychrom import simulation, forces, forcekits
+from polychrom.forces import openmm, nm
+
 
 from simconstructor import AttrDict, SimulationAction
 
 import starting_mitotic_conformations
 
 
+
+
+logging.basicConfig(level=logging.INFO)
+
+
+def max_dist_bonds(
+        sim_object,
+        bonds,
+        max_dist=1.0,
+        k = 5,
+        axes=['x','y','z'],
+        name="max_dist_bonds",
+        ):
+    """Adds harmonic bonds
+    Parameters
+    ----------
+    
+    bonds : iterable of (int, int)
+        Pairs of particle indices to be connected with a bond.
+    bondWiggleDistance : float
+        Average displacement from the equilibrium bond distance.
+        Can be provided per-particle.
+    bondLength : float
+        The length of the bond.
+        Can be provided per-particle.
+    """
+    
+    r_sqr_expr = '+'.join([f'({axis}1-{axis}2)^2' for axis in axes])
+    energy = ("kt * k * step(dr) * (sqrt(dr*dr + t*t) - t);"
+            + "dr = sqrt(r_sqr + tt^2) - max_dist + 10*t;"
+            + 'r_sqr = ' + r_sqr_expr
+    )
+
+    print(energy)
+
+    force = openmm.CustomCompoundBondForce(2, energy)
+    force.name = name
+
+    force.addGlobalParameter("kt", sim_object.kT)
+    force.addGlobalParameter("k", k / nm)
+    force.addGlobalParameter("t",  0.1 / k * nm)
+    force.addGlobalParameter("tt", 0.01 * nm)
+    force.addGlobalParameter("max_dist", max_dist * nm)
+    
+    for bond_idx, (i, j) in enumerate(bonds):
+        if (i >= sim_object.N) or (j >= sim_object.N):
+            raise ValueError(
+                "\nCannot add bond with monomers %d,%d that"\
+                "are beyound the polymer length %d" % (i, j, sim_object.N))
+        
+        force.addBond((int(i), int(j)), []) 
+
+    return force
+
+
+def linear_tether_particles(
+        sim_object, 
+        particles=None, 
+        k=5, 
+        positions="current",
+        name="linear_tethers"
+        ):
+    """tethers particles in the 'particles' array.
+    Increase k to tether them stronger, but watch the system!
+
+    Parameters
+    ----------
+
+    particles : list of ints
+        List of particles to be tethered (fixed in space).
+        Negative values are allowed. If None then tether all particles.
+    k : int, optional
+        The steepness of the tethering potential.
+        Values >30 will require decreasing potential, but will make tethering 
+        rock solid.
+        Can be provided as a vector [kx, ky, kz].
+    """
+    
+    energy = (
+        "   kx * ( sqrt((x - x0)^2 + t*t) - t ) "
+        " + ky * ( sqrt((y - y0)^2 + t*t) - t ) "
+        " + kz * ( sqrt((z - z0)^2 + t*t) - t ) "
+    )
+
+    force = openmm.CustomExternalForce(energy)
+    force.name = name
+
+    if particles is None:
+        particles = range(sim_object.N)
+        N_tethers = sim_object.N
+    else:
+        particles = [sim_object.N+i if i<0 else i 
+                    for i in particles]
+        N_tethers = len(particles)
+
+
+    if isinstance(k, collections.abc.Iterable):
+        k = np.array(k)
+        if k.ndim == 1:
+            if k.shape[0] != 3:
+                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
+            k = np.broadcast_to(k, (N_tethers,3))
+        elif k.ndim == 2:
+            if (k.shape[0] != N_tethers) and (k.shape[1] != 3):
+                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
+    else:
+        k = np.broadcast_to(k, (N_tethers,3))
+
+    if k.mean():
+        force.addGlobalParameter("t", (1. / k.mean()) * nm / 10.)
+    else:
+        force.addGlobalParameter("t", nm)
+    force.addPerParticleParameter("kx")
+    force.addPerParticleParameter("ky")
+    force.addPerParticleParameter("kz")
+    force.addPerParticleParameter("x0")
+    force.addPerParticleParameter("y0")
+    force.addPerParticleParameter("z0")
+
+    if positions == "current":
+        positions = [sim_object.data[i] for i in particles]
+    else:
+        positions = sim_object.addUnits(positions)
+
+    for i, (kx,ky,kz), (x,y,z) in zip(particles, k, positions):  # adding all the particles on which force acts
+        i = int(i)
+        force.addParticle(i, (kx * sim_object.kT / nm,
+                              ky * sim_object.kT / nm,
+                              kz * sim_object.kT / nm,
+                              x,y,z
+                             )
+                         )
+        if sim_object.verbose == True:
+            print("particle %d tethered! " % i)
+    
+    return force
+
+
+class ConstrainLoopsAlongZ(SimulationAction):
+    _default_params = AttrDict(
+        k = 5,
+        max_dz = 3
+    )
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        if 'GenerateTwoLayerLoops' in action_configs:
+            inner_loops = action_configs['GenerateTwoLayerLoops']['inner_loops']
+            bonds = sum(
+                [[(i, int((loop[0]+loop[1]) * 0.5))
+                  for i in range(loop[0], loop[1])] 
+                  for loop in inner_loops],
+                []
+            )
+        else:
+            raise ValueError('No loops set')
+
+        sim.add_force(
+            max_dist_bonds(
+                sim,
+                bonds,
+                max_dist=self_conf['max_dz'],
+                k = self_conf['k'],
+                axes=['z']
+            )
+        )
+
+        return sim
+
+
 class GenerateSingleLayerLoops(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         loop_size = 200,
 #        loop_gamma_k = 1,
@@ -32,21 +207,28 @@ class GenerateSingleLayerLoops(SimulationAction):
             N = shared_config['N']
                
         # TODO: move to share
-        shared_config_added_data['loops'] = (
-            looplib.random_loop_arrays.exponential_loop_array(
+        loops = looplib.random_loop_arrays.exponential_loop_array(
                 N, 
                 action_config['loop_size'],
-                action_config['loop_spacing'])
+                action_config['loop_spacing']
         )
 
-        shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
-                shared_config_added_data['loops'], N=N)
+        shared_config_added_data['loops'] = (
+            loops 
+            if 'loops' not in shared_config_added_data
+            else np.vstack([shared_config_added_data['loops'], loops])
+        )
+                
+        try:
+            shared_config_added_data['backbone'] = looplib.looptools.get_backbone(
+                    shared_config_added_data['loops'], N=N)
+        except:
+            shared_config_added_data['backbone'] = None
 
         return shared_config_added_data, action_config
 
 
 class GenerateTwoLayerLoops(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         inner_loop_size = 200,
         outer_loop_size = 200 * 4,
@@ -87,7 +269,11 @@ class GenerateTwoLayerLoops(SimulationAction):
         loops = np.vstack([outer_loops, inner_loops])
         loops.sort()
 
-        shared_config_added_data['loops'] = loops
+        shared_config_added_data['loops'] = (
+            shared_config_added_data.get('loops',[])
+            + loops
+        )
+
         action_config['inner_loops'] = inner_loops
         action_config['outer_loops'] = outer_loops
 
@@ -98,13 +284,12 @@ class GenerateTwoLayerLoops(SimulationAction):
 
 
 class AddLoops(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         wiggle_dist=0.05,
         bond_length=1.0
     )
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -124,7 +309,6 @@ class AddLoops(SimulationAction):
 
 class AddInitConfCylindricalConfinement(SimulationAction):
     # TODO: redo as a configuration step?..
-    stage = 'init'
     _default_params = AttrDict(
         k=1.0,
         r_max=None,
@@ -144,7 +328,7 @@ class AddInitConfCylindricalConfinement(SimulationAction):
 
         return shared_config_added_data, action_config
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -163,7 +347,6 @@ class AddInitConfCylindricalConfinement(SimulationAction):
 
 
 class AddTipsTethering(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         k=[0,0,5],
         particles=[0, -1],
@@ -171,7 +354,7 @@ class AddTipsTethering(SimulationAction):
     )
 
 
-    def run(self, shared_config, action_configs, sim):
+    def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -189,7 +372,6 @@ class AddTipsTethering(SimulationAction):
 
 
 class SaveConfiguration(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         backup = True
     )
@@ -217,12 +399,11 @@ class SaveConfiguration(SimulationAction):
 
 
 class AddDynamicCylinderCompression(SimulationAction):
-    stage = 'loop'
     _default_params = AttrDict(
         final_per_particle_volume = 1.5*1.5*1.5,
         final_axial_compression = 1,
-        powerlaw = 1.0,
-        initial_block = 0,
+        powerlaw = 2.0,
+        initial_block = 1,
         final_block = 100,
     )
 
@@ -250,7 +431,7 @@ class AddDynamicCylinderCompression(SimulationAction):
         return shared_config_added_data, action_config
 
 
-    def run(self, shared_config, action_configs, sim):
+    def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
@@ -293,7 +474,6 @@ class AddDynamicCylinderCompression(SimulationAction):
 
 
 class GenerateLoopBrushInitialConformation(SimulationAction):
-    stage = 'init'
     _default_params = AttrDict(
         helix_radius=0,
         helix_step=1000000,
@@ -315,4 +495,119 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
         )
 
         return shared_config_added_data, action_config
+
+
+class InitJitterMCMC(SimulationAction):
+    _default_params = AttrDict(
+        initial_block = 200,
+        final_block = 10000,
+        jitter_amplitude = 10 , 
+        frac_particles = 0.01,
+        k = 5,
+        steps_force = 10000,
+        steps_equilibrate = 10000
+    )
+    
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            linear_tether_particles(
+                sim_object=sim, 
+                particles=None, 
+                k=0, 
+                name = 'jitter_MCMC'
+            )
+        )
+
+        return sim
+
+
+    def run_loop(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.context.setParameter("jitter_MCMC_t", (1. / self_conf.k) * nm / 10.)
+
+        if self_conf.initial_block <= sim.block <= self_conf.final_block:
+            particles = np.sort(
+                np.random.choice(sim.N, int(sim.N*self_conf.frac_particles), replace=False)
+            )
+                            
+            premove_data = sim.get_data()
+            premove_Ep_kT = sim.context.getState(getEnergy=True).getPotentialEnergy() / sim.kT
+            premove_Ek_kT = sim.context.getState(getEnergy=True).getKineticEnergy() / sim.kT
+            premove_Etot_kT = premove_Ep_kT + premove_Ek_kT
+            premove_t_ps = sim.state.getTime() / simulation.ps
+
+            # TODO: implement get/set velocities in polychrom + reset velocities here?
+            # velocities_before_move = 
+
+            for i in particles:
+                new_pos = (premove_data[i] 
+                            + np.random.normal(scale=self_conf.jitter_amplitude,size=3)
+                )
+
+                sim.force_dict['jitter_MCMC'].setParticleParameters(
+                        int(i), int(i), 
+                        [self_conf.k * sim.kT / nm,
+                            self_conf.k * sim.kT / nm,
+                            self_conf.k * sim.kT / nm,
+                            new_pos[0] * nm, 
+                            new_pos[1] * nm, 
+                            new_pos[2] * nm]
+                )
+                            
+            
+            sim.force_dict['jitter_MCMC'].updateParametersInContext(
+                    sim.context)
+
+            logging.info(f'Pre-move Ep = {premove_Ep_kT:.3f} kT, '
+                            f'Ek = {premove_Ek_kT:.3f} kT, '
+                            f'Etot = {premove_Etot_kT:.3f}')
+
+            sim.do_block(self_conf.steps_force)  
+
+            for i in particles:
+                new_pos = premove_data[i] + np.random.normal(scale=self_conf.jitter_amplitude,size=3)
+                new_pos *= nm
+                sim.force_dict['jitter_MCMC'].setParticleParameters(
+                        int(i), int(i), [0,0,0,0,0,0])
+            
+            sim.force_dict['jitter_MCMC'].updateParametersInContext(
+                    sim.context)
+
+            while True:
+                sim.do_block(self_conf.steps_equilibrate)
+
+                path = os.path.join(shared_config['folder'], f'block.mcmc.{sim.block}.txt.gz')
+                data = sim.get_data()
+                np.savetxt(path, data)
+
+                postmove_Ep_kT = sim.context.getState(getEnergy=True).getPotentialEnergy()  / sim.kT
+                postmove_Ek_kT = sim.context.getState(getEnergy=True).getKineticEnergy() / sim.kT
+                postmove_Etot_kT = postmove_Ep_kT + postmove_Ek_kT
+
+                logging.info(f'Post-move Ep = {postmove_Ep_kT:.3f} kT, '
+                                f'Ek = {postmove_Ek_kT:.3f} kT, '
+                                f'Etot = {postmove_Etot_kT:.3f}')
+                accept = np.random.random() < np.exp(premove_Etot_kT-postmove_Etot_kT)
+
+                if accept:
+                    logging.info(f'Accept the move!')
+                    break
+                # else:
+                #     logging.info(f'Reject the move, try again!')
+                #     sim.block -= 2
+                #     sim.step -= self_conf.steps_force
+                #     sim.step -= self_conf.steps_equilibrate
+                #     # reset speeds
+
+                #     sim.set_data(premove_data, center=False, random_offset = 0)
+                #     sim.context.setTime(premove_t_ps * simulation.ps)
+                    
+        return sim
 
