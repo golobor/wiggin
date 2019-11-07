@@ -207,6 +207,7 @@ class LocalEnergyMinimization(SimulationAction):
     _default_params = AttrDict(
         max_iterations = 1000,
         tolerance = 1,
+        random_offset = 0.1
     )
 
     def run_init(self, shared_config, action_configs, sim):
@@ -215,7 +216,8 @@ class LocalEnergyMinimization(SimulationAction):
         self_conf = action_configs[self.name]
         sim.local_energy_minimization(
                 maxIterations=self_conf.max_iterations,
-                tolerance=self_conf.tolerance
+                tolerance=self_conf.tolerance,
+                random_offset=self_conf.random_offset
         )
         return sim
  
