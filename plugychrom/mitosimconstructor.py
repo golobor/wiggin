@@ -237,8 +237,9 @@ class GenerateTwoLayerLoops(SimulationAction):
         loops.sort()
 
         shared_config_added_data['loops'] = (
-            shared_config_added_data.get('loops',[])
-            + loops
+            loops 
+            if 'loops' not in shared_config_added_data
+            else np.vstack([shared_config_added_data['loops'], loops])
         )
 
         action_config['inner_loops'] = inner_loops
