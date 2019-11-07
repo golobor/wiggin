@@ -4,7 +4,7 @@ import numpy as np
 import plugychrom.simconstructor as smc
 import plugychrom.mitosimconstructor as msmc
 
-def nameSimulation(simconstructor, base_folder = '/net/levsha/share/golobor/mitosis-models/structural-2nd-gen/'):
+def nameSimulation(simconstructor, base_folder = '../data/'):
     name = []
     for action, params in simconstructor.action_params.items():
         for k,v in params.items():
