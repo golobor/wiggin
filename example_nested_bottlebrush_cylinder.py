@@ -1,10 +1,10 @@
 import os
 import numpy as np
 
-import simconstructor as smc
-import mitosimconstructor as msmc
+import plugychrom.simconstructor as smc
+import plugychrom.mitosimconstructor as msmc
 
-def nameSimulation(simconstructor, base_folder = '../data/'):
+def nameSimulation(simconstructor, base_folder = '/net/levsha/share/golobor/mitosis-models/structural-2nd-gen/'):
     name = []
     for action, params in simconstructor.action_params.items():
         for k,v in params.items():
@@ -21,16 +21,13 @@ c.add_action(
     smc.InitializeSimulation(
         N=200*4*500,
         #platform='CPU'
-        GPU='0',
+        GPU='1',
         error_tol=0.001,
         collision_rate=0.003,
 #        max_Ek=1000,
     ),
 )
 
-#c.add_action(
-#    msmc.GenerateSingleLayerLoops(loop_size=400),
-#)
 c.add_action(
     msmc.GenerateTwoLayerLoops(
         inner_loop_size = 200,
@@ -68,16 +65,16 @@ c.add_action(
 )
 
 c.add_action(
-    smc.LocalEnergyMinimization(tolerance=10)
-)
-
-c.add_action(
     msmc.AddDynamicCylinderCompression(
         powerlaw=2,
         initial_block = 1,
-        final_block = 100,
-        final_axial_compression = 4
+        final_block = 300,
+        final_axial_compression = 2
     )
+)
+
+c.add_action(
+    smc.LocalEnergyMinimization(tolerance=10)
 )
 
 c.add_action(
