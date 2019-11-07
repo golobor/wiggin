@@ -32,7 +32,7 @@ def _read(*parts, **kwargs):
 def get_version():
     version = re.search(
         r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
-        _read('pairlib', '__init__.py'),
+        _read('plugychrom', '__init__.py'),
         re.MULTILINE).group(1)
     return version
 
