@@ -335,6 +335,27 @@ class AddTipsTethering(SimulationAction):
         return sim
 
 
+class AddBackboneTethering(SimulationAction):
+    _default_params = AttrDict(
+        k=15,
+    )
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            forces.tether_particles(
+                sim_object=sim, 
+                particles=shared_config.backbone, 
+                k=self_conf.k, 
+                positions='current',
+                name='tether_backbone'
+            )
+        )
+
+
 class SaveConfiguration(SimulationAction):
     _default_params = AttrDict(
         backup = True
