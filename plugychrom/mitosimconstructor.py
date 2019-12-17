@@ -11,8 +11,6 @@ from .simconstructor import AttrDict, SimulationAction
 from . import starting_mitotic_conformations
 
 
-
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -150,11 +148,9 @@ def linear_tether_particles(
 
 
 
-
-
 class GenerateSingleLayerLoops(SimulationAction):
     _default_params = AttrDict(
-        loop_size = 200,
+        loop_size = 400,
 #        loop_gamma_k = 1,
         loop_spacing = 1,
     )
@@ -197,8 +193,8 @@ class GenerateSingleLayerLoops(SimulationAction):
 
 class GenerateTwoLayerLoops(SimulationAction):
     _default_params = AttrDict(
-        inner_loop_size = 200,
-        outer_loop_size = 200 * 4,
+        inner_loop_size = 400,
+        outer_loop_size = 400 * 4,
         inner_loop_spacing = 1,
         outer_loop_spacing = 1,
         outer_inner_offset= 1,
@@ -443,8 +439,9 @@ class AddDynamicCylinderCompression(SimulationAction):
 
 class GenerateLoopBrushInitialConformation(SimulationAction):
     _default_params = AttrDict(
-        helix_radius=0,
-        helix_step=1000000,
+        helix_radius=None,
+        helix_turn_length=None,
+        helix_step=None,
         random_loop_orientations=True,
     )
 
@@ -452,16 +449,42 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
     
+        if (action_config.helix_radius is not None) and (action_config.helix_turn_length is not None):
+            raise ValueError('Please specify either helix_radius or helix_turn_length')
+        
+        if ((action_config.helix_radius is not None) or (action_config.helix_turn_length is not None)) and (action_config.helix_step is None):
+            raise ValueError('Please specify helix_step and either helix_radius or helix_turn_length')
+        
+        if (action_config.helix_step is not None) and ((action_config.helix_radius is None) and (action_config.helix_turn_length is None)):
+            raise ValueError('Please specify helix_step and either helix_radius or helix_turn_length')
+        
+        if (action_config.helix_radius is not None) and (action_config.helix_step is not None):
+            helix_radius = action_config.helix_radius
+            helix_step = action_config.helix_step
+        elif (action_config.helix_turn_length is not None) and (action_config.helix_step is not None):
+            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+                                      - 
+                                      (action_config.helix_step) ** 2 
+                                    ) / np.pi / np.pi / 2.0 / 2.0
+            if helix_radius_squared <= 0:
+                raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
+
+            helix_radius = helix_radius_squared ** 0.5
+            helix_step = action_config.helix_step
+        else:
+            helix_radius = 0
+            helix_step = int(1e9)
+
+
         shared_config_added_data.initial_conformation = (
             starting_mitotic_conformations.make_helical_loopbrush(
                 L=shared_config.N,
-                helix_radius=action_config.helix_radius,
-                helix_step=action_config.helix_step,
+                helix_radius=helix_radius,
+                helix_step=helix_step,
                 loops=shared_config.loops,
                 random_loop_orientations=action_config.random_loop_orientations
             )
         )
 
         return shared_config_added_data, action_config
-
 

@@ -160,7 +160,8 @@ class InitializeSimulation(SimulationAction):
             shared_config, action_configs)
 
         action_config['computer_name'] = socket.gethostname()
-        shared_config_added_data['N'] = action_config['N']
+        if action_config['N'] is not None:
+            shared_config_added_data['N'] = action_config['N']
 
         return shared_config_added_data, action_config
 
