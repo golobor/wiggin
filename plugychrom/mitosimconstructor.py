@@ -355,6 +355,8 @@ class AddBackboneTethering(SimulationAction):
             )
         )
 
+        return sim
+
 
 class SaveConfiguration(SimulationAction):
     _default_params = AttrDict(
