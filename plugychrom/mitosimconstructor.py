@@ -271,6 +271,53 @@ class AddLoops(SimulationAction):
         return sim
 
 
+class AddBackboneTethering(SimulationAction):
+    _default_params = AttrDict(
+        k=15,
+    )
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            forces.tether_particles(
+                sim_object=sim, 
+                particles=shared_config.backbone, 
+                k=self_conf.k, 
+                positions='current',
+                name='tether_backbone'
+            )
+        )
+
+        return sim
+
+class AddTipsTethering(SimulationAction):
+    _default_params = AttrDict(
+        k=[0,0,5],
+        particles=[0, -1],
+        positions='current',
+    )
+
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            forces.tether_particles(
+                sim_object=sim, 
+                particles=self_conf.particles, 
+                k=self_conf.k, 
+                positions=self_conf.positions,
+            )
+        )
+
+        return sim
+
+
 class AddInitConfCylindricalConfinement(SimulationAction):
     # TODO: redo as a configuration step?..
     _default_params = AttrDict(
@@ -308,81 +355,6 @@ class AddInitConfCylindricalConfinement(SimulationAction):
         )
 
         return sim
-
-
-class AddTipsTethering(SimulationAction):
-    _default_params = AttrDict(
-        k=[0,0,5],
-        particles=[0, -1],
-        positions='current',
-    )
-
-
-    def run_init(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-
-        sim.add_force(
-            forces.tether_particles(
-                sim_object=sim, 
-                particles=self_conf.particles, 
-                k=self_conf.k, 
-                positions=self_conf.positions,
-            )
-        )
-
-        return sim
-
-
-class AddBackboneTethering(SimulationAction):
-    _default_params = AttrDict(
-        k=15,
-    )
-
-    def run_init(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-
-        sim.add_force(
-            forces.tether_particles(
-                sim_object=sim, 
-                particles=shared_config.backbone, 
-                k=self_conf.k, 
-                positions='current',
-                name='tether_backbone'
-            )
-        )
-
-        return sim
-
-
-class SaveConfiguration(SimulationAction):
-    _default_params = AttrDict(
-        backup = True
-    )
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs)
-
-        os.mkdir(shared_config['folder'])
-        paths = [os.path.join(shared_config['folder'], 'conf.shlv')] 
-
-        if action_config['backup']:
-            os.mkdir(shared_config['folder']+'/backup/')
-            paths.append(os.path.join(shared_config['folder'], 'backup', 'conf.shlv'))
-
-        for path in paths:
-            conf = shelve.open(path, protocol=2)
-            # TODO: fix saving action_params
-            # conf['params'] = {k:dict(v) for k,v in ..}
-            conf['shared_config'] = shared_config
-            conf['action_configs'] = {k:dict(v) for k,v in action_configs.items()}
-            conf.close()
-
-        return shared_config_added_data, action_config
 
 
 class AddDynamicCylinderCompression(SimulationAction):
@@ -460,6 +432,61 @@ class AddDynamicCylinderCompression(SimulationAction):
         return sim
 
 
+class AddStaticCylinderCompression(SimulationAction):
+    _default_params = AttrDict(
+        k=1.0,
+        z_min=None,
+        z_max=None,
+        r=None,
+        per_particle_volume = 1.5*1.5*1.5,
+    )
+    
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        if ((action_config.z_min is None) != (action_config.z_max is None)):
+            raise ValueError('Both z_min and z_max have to be either specified or left as None.')
+        elif ((action_config.z_min is None) and (action_config.z_max is None)):
+            coords = shared_config['initial_conformation']
+            action_config['z_min'] = coords[:,2].min()
+            action_config['z_max'] = coords[:,2].max()
+        else:
+            action_config['z_min'] = action_config.z_min
+            action_config['z_max'] = action_config.z_max
+
+
+        if ((action_config.r is not None) and (action_config.per_particle_volume is not None)):
+            raise ValueError('Please specify either r or per_particle_volume.')
+        elif ((action_config.r is None) and (action_config.per_particle_volume is None)):
+            coords = shared_config['initial_conformation']
+            action_config['r'] = ((coords[:,:2]**2).sum(axis=1)**0.5).max()
+        elif ((action_config.r is None) and (action_config.per_particle_volume is not None)):
+            action_config['r'] = np.sqrt(
+                shared_config.N * action_config.per_particle_volume 
+                / (action_config['z_max'] - action_config['z_min']) / np.pi
+            )
+        
+        return shared_config_added_data, action_config
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            forces.cylindrical_confinement(
+                sim_object=sim,
+                r=self_conf.r,
+                top=self_conf.z_max,
+                bottom=self_conf.z_min, 
+                k=self_conf.k
+            )
+        )
+
+        return sim
+
+
 class GenerateLoopBrushInitialConformation(SimulationAction):
     _default_params = AttrDict(
         helix_radius=None,
@@ -508,6 +535,33 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
                 random_loop_orientations=action_config.random_loop_orientations
             )
         )
+
+        return shared_config_added_data, action_config
+
+
+class SaveConfiguration(SimulationAction):
+    _default_params = AttrDict(
+        backup = True
+    )
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        os.mkdir(shared_config['folder'])
+        paths = [os.path.join(shared_config['folder'], 'conf.shlv')] 
+
+        if action_config['backup']:
+            os.mkdir(shared_config['folder']+'/backup/')
+            paths.append(os.path.join(shared_config['folder'], 'backup', 'conf.shlv'))
+
+        for path in paths:
+            conf = shelve.open(path, protocol=2)
+            # TODO: fix saving action_params
+            # conf['params'] = {k:dict(v) for k,v in ..}
+            conf['shared_config'] = shared_config
+            conf['action_configs'] = {k:dict(v) for k,v in action_configs.items()}
+            conf.close()
 
         return shared_config_added_data, action_config
 
