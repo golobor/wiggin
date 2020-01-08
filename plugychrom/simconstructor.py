@@ -28,7 +28,6 @@ class AttrDict(dict):
 
 class SimulationConstructor:
     def __init__(self):
-
         self._actions = []
 
         self._sim = None
@@ -41,7 +40,6 @@ class SimulationConstructor:
 
         self.action_params = AttrDict()
         self.action_configs = AttrDict()
-        pass
 
 
     def add_action(self, action):
@@ -67,7 +65,7 @@ class SimulationConstructor:
                 self.action_configs)
 
             assert conf_res is not None, (
-                    f'Action {action.name} must return two configs in .configure!')
+                    f'Action {action.name} must return two configs in .configure()!')
 
             shared_config_added_data, action_config = conf_res
             self.shared_config.update(shared_config_added_data) 
@@ -94,6 +92,18 @@ class SimulationConstructor:
                         break
                     else:
                         self._sim = sim
+
+
+    def auto_name(self, root_data_folder = './data/'):
+        name = []
+        for _, params in self.action_params.items():
+            for k,v in params.items():
+                name += ['_', k, '-', str(v)]
+
+        name = ''.join(name[1:])
+        self.shared_config['name'] = name
+        self.shared_config['folder'] = os.path.join(root_data_folder, name)
+        
 
 
 class SimulationAction:
@@ -334,7 +344,7 @@ class SetInitialConformation(SimulationAction):
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # self_conf = action_configs[self.name]
         sim.set_data(shared_config.initial_conformation)
 
         return sim
@@ -448,25 +458,3 @@ class AddGlobalVariableDynamics(SimulationAction):
 #         np.savetxt(path, data)
 
 #         return sim
-
-
-class NameSimulationByParams(SimulationAction):
-    _default_params = AttrDict(
-        base_folder = './data/'
-    )
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs)        
-
-        name = []
-        for action, params in action_params.items():
-            for k,v in params.items():
-                name += ['_', k, '-', str(v)]
-
-        name = ''.join(name[1:])
-        shared_config_added_data['name'] = name
-        shared_config_added_data['folder'] = os.path.join(action_config['base_folder'], name)
-        
-        return shared_config_added_data, action_config
-
