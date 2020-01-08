@@ -2,7 +2,7 @@ import socket, copy, itertools, os, logging
 
 import numpy as np
 
-from polychrom import simulation, forces, forcekits
+from polychrom import simulation, forces, forcekits, hdf5_format
 
 
 
@@ -171,6 +171,17 @@ class InitializeSimulation(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
 
         self_conf = action_configs[self.name]
+
+        if shared_config['folder'] is None:
+            raise ValueError(
+                'The data folder is not set, please specify it in '
+                'SimulationConstructor() or via NameSimulationByParams()'
+            )
+
+        reporter = hdf5_format.HDF5Reporter(
+            folder=shared_config['folder'], 
+            overwrite=False)
+
         sim = simulation.Simulation(
             platform=self_conf.platform,
             GPU=self_conf.GPU,
@@ -179,8 +190,9 @@ class InitializeSimulation(SimulationAction):
             collision_rate=self_conf.collision_rate,
             mass=self_conf.mass,
             N=shared_config.N,
-            max_Ek=self_conf.max_Ek
-        )  # timestep not necessary for variableLangevin
+            max_Ek=self_conf.max_Ek,
+            reporters = [reporter]
+        )  
 
         return sim
 
@@ -425,18 +437,36 @@ class AddGlobalVariableDynamics(SimulationAction):
             sim.context.setParameter(self_conf.variable_name, new_val)
 
 
-class SaveConformation(SimulationAction):
+# class SaveConformationTxt(SimulationAction):
 
-    def run_loop(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-        path = os.path.join(shared_config['folder'], f'block.{sim.block}.txt.gz')
-        data = sim.get_data()
-        np.savetxt(path, data)
+#     def run_loop(self, shared_config, action_configs, sim):
+#         # do not use self.params!
+#         # only use parameters from action_configs[self.name] and shared_config
+#         self_conf = action_configs[self.name]
+#         path = os.path.join(shared_config['folder'], f'block.{sim.block}.txt.gz')
+#         data = sim.get_data()
+#         np.savetxt(path, data)
 
-        return sim
+#         return sim
 
 
-#class AddPerParticleVariableDynamics(SimulationAction):
-#    stage = 'init'
+class NameSimulationByParams(SimulationAction):
+    _default_params = AttrDict(
+        base_folder = './data/'
+    )
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)        
+
+        name = []
+        for action, params in action_configs.items():
+            for k,v in params.items():
+                name += ['_', k, '-', str(v)]
+
+        name = ''.join(name[1:])
+        shared_config_added_data['name'] = name
+        shared_config_added_data['folder'] = os.path.join(action_config['base_folder'], name)
+        
+        return shared_config_added_data, action_config
+
