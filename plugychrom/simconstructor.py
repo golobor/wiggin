@@ -460,7 +460,7 @@ class NameSimulationByParams(SimulationAction):
             shared_config, action_configs)        
 
         name = []
-        for action, params in action_configs.items():
+        for action, params in action_params.items():
             for k,v in params.items():
                 name += ['_', k, '-', str(v)]
 
