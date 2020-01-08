@@ -188,6 +188,8 @@ class InitializeSimulation(SimulationAction):
                 'SimulationConstructor() or via NameSimulationByParams()'
             )
 
+        os.mkdir(shared_config['folder'])
+        
         reporter = hdf5_format.HDF5Reporter(
             folder=shared_config['folder'], 
             overwrite=False)
