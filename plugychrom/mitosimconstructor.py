@@ -3,7 +3,7 @@ import os, shelve, itertools, logging, collections
 import numpy as np
 
 from polychrom import simulation, forces, forcekits
-from polychrom.forces import openmm, nm
+from polychrom.forces import openmm
 
 
 from .simconstructor import AttrDict, SimulationAction
@@ -48,12 +48,12 @@ def max_dist_bonds(
     force.name = name
 
     force.addGlobalParameter("kt", sim_object.kT)
-    force.addGlobalParameter("k", k / nm)
-    force.addGlobalParameter("t",  0.1 / k * nm)
-    force.addGlobalParameter("tt", 0.01 * nm)
-    force.addGlobalParameter("max_dist", max_dist * nm)
+    force.addGlobalParameter("k", k / sim_object.conlen)
+    force.addGlobalParameter("t",  0.1 / k * sim_object.conlen)
+    force.addGlobalParameter("tt", 0.01 * sim_object.conlen)
+    force.addGlobalParameter("max_dist", max_dist * sim_object.conlen)
     
-    for bond_idx, (i, j) in enumerate(bonds):
+    for _, (i, j) in enumerate(bonds):
         if (i >= sim_object.N) or (j >= sim_object.N):
             raise ValueError(
                 "\nCannot add bond with monomers %d,%d that"\
@@ -118,9 +118,9 @@ def linear_tether_particles(
         k = np.broadcast_to(k, (N_tethers,3))
 
     if k.mean():
-        force.addGlobalParameter("t", (1. / k.mean()) * nm / 10.)
+        force.addGlobalParameter("t", (1. / k.mean()) * sim_object.conlen / 10.)
     else:
-        force.addGlobalParameter("t", nm)
+        force.addGlobalParameter("t", sim_object.conlen)
     force.addPerParticleParameter("kx")
     force.addPerParticleParameter("ky")
     force.addPerParticleParameter("kz")
@@ -135,9 +135,9 @@ def linear_tether_particles(
 
     for i, (kx,ky,kz), (x,y,z) in zip(particles, k, positions):  # adding all the particles on which force acts
         i = int(i)
-        force.addParticle(i, (kx * sim_object.kT / nm,
-                              ky * sim_object.kT / nm,
-                              kz * sim_object.kT / nm,
+        force.addParticle(i, (kx * sim_object.kT / sim_object.conlen,
+                              ky * sim_object.kT / sim_object.conlen,
+                              kz * sim_object.kT / sim_object.conlen,
                               x,y,z
                              )
                          )
@@ -418,7 +418,7 @@ class AddDynamicCylinderCompression(SimulationAction):
 
             for k in ks:
                 sim.context.setParameter(
-                    f'cylindrical_confinement_{k}', new_vals[k] * sim.nm)
+                    f'cylindrical_confinement_{k}', new_vals[k] * sim.conlen)
 
             if 'AddTipsTethering' in action_configs:
                 if 'top' in ks and 'bottom' in ks:
