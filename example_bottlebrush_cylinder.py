@@ -79,10 +79,6 @@ c.add_action(
     ),
 )
 
-c.add_action(
-    smc.SaveConformation()
-)
-
 
 nameSimulation(c)
 

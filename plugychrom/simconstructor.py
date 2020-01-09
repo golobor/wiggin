@@ -156,12 +156,12 @@ class InitializeSimulation(SimulationAction):
         platform='CUDA',
         GPU='0',
         integrator = 'variableLangevin',
-        error_tol = 0.001,
+        error_tol = 0.01,
         mass = 1,
-        collision_rate = 0.01,
+        collision_rate = 0.003,
         temperature = 300,
         timestep = 1.0,
-        max_Ek=100,
+        max_Ek=1000,
     )
 
 
