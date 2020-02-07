@@ -27,15 +27,15 @@ class AttrDict(dict):
 
 
 class SimulationConstructor:
-    def __init__(self):
+    def __init__(self, name=None, folder=None):
         self._actions = []
 
         self._sim = None
         self.shared_config = AttrDict(
-            name=None,
+            name=name,
             N=None,
             initial_conformation=None,
-            folder=None,
+            folder=folder,
         )
 
         self.action_params = AttrDict()
@@ -220,12 +220,11 @@ class BlockStep(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if (sim.step / self_conf.block_size >= self_conf.num_blocks):
-            return None
-        else:
-            sim.do_block(self_conf.block_size)  
+        if (sim.step / self_conf.block_size < self_conf.num_blocks):
+            sim.do_block(self_conf.block_siz)  
             return sim
-
+        else:
+            return None
 
 
 class LocalEnergyMinimization(SimulationAction):
