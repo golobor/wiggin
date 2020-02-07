@@ -1,4 +1,4 @@
-import os, shelve, itertools, logging, collections
+import os, sys, shelve, itertools, logging, collections
 
 import numpy as np
 
@@ -541,14 +541,23 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
 
 class SaveConfiguration(SimulationAction):
     _default_params = AttrDict(
-        backup = True
+        backup = True,
+        mode_exists = 'fail' # 'exit' 'overwrite'
     )
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
 
-        os.mkdir(shared_config['folder'])
+        if action_config['mode_exists'] not in ['fail', 'exit', 'overwrite']:
+            raise ValueError(f'Unknown mode for saving configuration: {action_config["mode_exists"]}')
+        if os.path.exists(shared_config['folder']):
+            if action_config['mode_exists'] == 'fail':
+                raise OSError(f'The output folder already exists {shared_config['folder']}!')
+            elif action_config['mode_exists'] == 'exit':
+                sys.exit(0)
+
+        os.makedirs(shared_config['folder'], exist_ok=True)
         paths = [os.path.join(shared_config['folder'], 'conf.shlv')] 
 
         if action_config['backup']:
