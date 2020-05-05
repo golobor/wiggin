@@ -6,17 +6,17 @@ def norm(vector):
     return np.sqrt(np.dot(vector, vector))
 
 
-def swap_nearby_particles(d, portion, cutoff=1.5, separation_cutoff=1):
-    newd = np.copy(d)
-    contacts = polymerScalings.giveContacts(d, cutoff)
-    numSwapped = 0
-    for i,j in contacts:
-        if abs(i-j)>separation_cutoff and np.random.random() < portion:
-            newd[i], newd[j] = d[j], d[i]
-            numSwapped += 1
-    print('{0} particles swapped...'.format(numSwapped))
+# def swap_nearby_particles(d, portion, cutoff=1.5, separation_cutoff=1):
+#     newd = np.copy(d)
+#     contacts = polymerScalings.giveContacts(d, cutoff)
+#     numSwapped = 0
+#     for i,j in contacts:
+#         if abs(i-j)>separation_cutoff and np.random.random() < portion:
+#             newd[i], newd[j] = d[j], d[i]
+#             numSwapped += 1
+#     print('{0} particles swapped...'.format(numSwapped))
 
-    return newd
+#     return newd
 
 
 def make_catenated_pair(core_conformation, linking_number, radius, shorten_conformation=True):
