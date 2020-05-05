@@ -1,15 +1,14 @@
-import os, sys, shelve, itertools, logging, collections
+import os, sys, shelve, logging, collections
 
 import numpy as np
 
-from polychrom import simulation, forces, forcekits
+from polychrom import forces
 from polychrom.forces import openmm
 
 
 from .simconstructor import AttrDict, SimulationAction
 
 from . import starting_mitotic_conformations
-
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,8 +17,8 @@ def max_dist_bonds(
         sim_object,
         bonds,
         max_dist=1.0,
-        k = 5,
-        axes=['x','y','z'],
+        k=5,
+        axes=['x', 'y', 'z'],
         name="max_dist_bonds",
         ):
     """Adds harmonic bonds
@@ -131,7 +130,7 @@ def linear_tether_particles(
     if positions == "current":
         positions = [sim_object.data[i] for i in particles]
     else:
-        positions = sim_object.addUnits(positions)
+        positions = np.array(positions) * sim_object.conlen
 
     for i, (kx,ky,kz), (x,y,z) in zip(particles, k, positions):  # adding all the particles on which force acts
         i = int(i)
@@ -553,7 +552,7 @@ class SaveConfiguration(SimulationAction):
             raise ValueError(f'Unknown mode for saving configuration: {action_config["mode_exists"]}')
         if os.path.exists(shared_config['folder']):
             if action_config['mode_exists'] == 'fail':
-                raise OSError(f'The output folder already exists {shared_config['folder']}!')
+                raise OSError(f'The output folder already exists {shared_config["folder"]}!')
             elif action_config['mode_exists'] == 'exit':
                 sys.exit(0)
 

@@ -155,13 +155,16 @@ class InitializeSimulation(SimulationAction):
         computer_name=None,
         platform='CUDA',
         GPU='0',
-        integrator = 'variableLangevin',
-        error_tol = 0.01,
-        mass = 1,
-        collision_rate = 0.003,
-        temperature = 300,
-        timestep = 1.0,
+        integrator='variableLangevin',
+        error_tol=0.01,
+        mass=1,
+        collision_rate=0.003,
+        temperature=300,
+        timestep=1.0,
         max_Ek=1000,
+        PBCbox=False,
+        reporter_block_size=50,
+        reporter_blocks_only=False,
     )
 
 
@@ -191,7 +194,9 @@ class InitializeSimulation(SimulationAction):
         os.makedirs(shared_config['folder'], exist_ok=True)
         
         reporter = hdf5_format.HDF5Reporter(
-            folder=shared_config['folder'], 
+            folder=shared_config['folder'],
+            max_data_length=self_conf['reporter_block_size'], 
+            blocks_only=self_conf['reporter_blocks_only'],
             overwrite=False)
 
         sim = simulation.Simulation(
@@ -201,6 +206,7 @@ class InitializeSimulation(SimulationAction):
             error_tol=self_conf.error_tol,
             collision_rate=self_conf.collision_rate,
             mass=self_conf.mass,
+            PBCbox=self_conf.PBCbox,
             N=shared_config.N,
             max_Ek=self_conf.max_Ek,
             reporters = [reporter]
@@ -221,7 +227,7 @@ class BlockStep(SimulationAction):
         self_conf = action_configs[self.name]
 
         if (sim.step / self_conf.block_size < self_conf.num_blocks):
-            sim.do_block(self_conf.block_siz)  
+            sim.do_block(self_conf.block_size)  
             return sim
         else:
             return None
