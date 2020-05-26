@@ -1,149 +1,17 @@
-import os, sys, shelve, logging, collections
+import os
+import sys
+import shelve
+import logging
 
 import numpy as np
 
 from polychrom import forces
-from polychrom.forces import openmm
-
 
 from .simconstructor import AttrDict, SimulationAction
 
 from . import starting_mitotic_conformations
 
 logging.basicConfig(level=logging.INFO)
-
-
-def max_dist_bonds(
-        sim_object,
-        bonds,
-        max_dist=1.0,
-        k=5,
-        axes=['x', 'y', 'z'],
-        name="max_dist_bonds",
-        ):
-    """Adds harmonic bonds
-    Parameters
-    ----------
-    
-    bonds : iterable of (int, int)
-        Pairs of particle indices to be connected with a bond.
-    bondWiggleDistance : float
-        Average displacement from the equilibrium bond distance.
-        Can be provided per-particle.
-    bondLength : float
-        The length of the bond.
-        Can be provided per-particle.
-    """
-    
-    r_sqr_expr = '+'.join([f'({axis}1-{axis}2)^2' for axis in axes])
-    energy = ("kt * k * step(dr) * (sqrt(dr*dr + t*t) - t);"
-            + "dr = sqrt(r_sqr + tt^2) - max_dist + 10*t;"
-            + 'r_sqr = ' + r_sqr_expr
-    )
-
-    print(energy)
-
-    force = openmm.CustomCompoundBondForce(2, energy)
-    force.name = name
-
-    force.addGlobalParameter("kt", sim_object.kT)
-    force.addGlobalParameter("k", k / sim_object.conlen)
-    force.addGlobalParameter("t",  0.1 / k * sim_object.conlen)
-    force.addGlobalParameter("tt", 0.01 * sim_object.conlen)
-    force.addGlobalParameter("max_dist", max_dist * sim_object.conlen)
-    
-    for _, (i, j) in enumerate(bonds):
-        if (i >= sim_object.N) or (j >= sim_object.N):
-            raise ValueError(
-                "\nCannot add bond with monomers %d,%d that"\
-                "are beyound the polymer length %d" % (i, j, sim_object.N))
-        
-        force.addBond((int(i), int(j)), []) 
-
-    return force
-
-
-def linear_tether_particles(
-        sim_object, 
-        particles=None, 
-        k=5, 
-        positions="current",
-        name="linear_tethers"
-        ):
-    """tethers particles in the 'particles' array.
-    Increase k to tether them stronger, but watch the system!
-
-    Parameters
-    ----------
-
-    particles : list of ints
-        List of particles to be tethered (fixed in space).
-        Negative values are allowed. If None then tether all particles.
-    k : int, optional
-        The steepness of the tethering potential.
-        Values >30 will require decreasing potential, but will make tethering 
-        rock solid.
-        Can be provided as a vector [kx, ky, kz].
-    """
-    
-    energy = (
-        "   kx * ( sqrt((x - x0)^2 + t*t) - t ) "
-        " + ky * ( sqrt((y - y0)^2 + t*t) - t ) "
-        " + kz * ( sqrt((z - z0)^2 + t*t) - t ) "
-    )
-
-    force = openmm.CustomExternalForce(energy)
-    force.name = name
-
-    if particles is None:
-        particles = range(sim_object.N)
-        N_tethers = sim_object.N
-    else:
-        particles = [sim_object.N+i if i<0 else i 
-                    for i in particles]
-        N_tethers = len(particles)
-
-
-    if isinstance(k, collections.abc.Iterable):
-        k = np.array(k)
-        if k.ndim == 1:
-            if k.shape[0] != 3:
-                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
-            k = np.broadcast_to(k, (N_tethers,3))
-        elif k.ndim == 2:
-            if (k.shape[0] != N_tethers) and (k.shape[1] != 3):
-                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
-    else:
-        k = np.broadcast_to(k, (N_tethers,3))
-
-    if k.mean():
-        force.addGlobalParameter("t", (1. / k.mean()) * sim_object.conlen / 10.)
-    else:
-        force.addGlobalParameter("t", sim_object.conlen)
-    force.addPerParticleParameter("kx")
-    force.addPerParticleParameter("ky")
-    force.addPerParticleParameter("kz")
-    force.addPerParticleParameter("x0")
-    force.addPerParticleParameter("y0")
-    force.addPerParticleParameter("z0")
-
-    if positions == "current":
-        positions = [sim_object.data[i] for i in particles]
-    else:
-        positions = np.array(positions) * sim_object.conlen
-
-    for i, (kx,ky,kz), (x,y,z) in zip(particles, k, positions):  # adding all the particles on which force acts
-        i = int(i)
-        force.addParticle(i, (kx * sim_object.kT / sim_object.conlen,
-                              ky * sim_object.kT / sim_object.conlen,
-                              kz * sim_object.kT / sim_object.conlen,
-                              x,y,z
-                             )
-                         )
-        if sim_object.verbose == True:
-            print("particle %d tethered! " % i)
-    
-    return force
 
 
 
@@ -263,7 +131,8 @@ class AddLoops(SimulationAction):
                 bonds=shared_config['loops'],
                 bondWiggleDistance=self_conf.wiggle_dist,
                 bondLength=self_conf.bond_length,
-                name='LoopHarmonicBonds'
+                name='LoopHarmonicBonds',
+                override_checks=True
             )
         )
 
@@ -431,6 +300,97 @@ class AddDynamicCylinderCompression(SimulationAction):
         return sim
 
 
+class AddTwoStepDynamicCylinderCompression(SimulationAction):
+    _default_params = AttrDict(
+        final_per_particle_volume = 1.5*1.5*1.5,
+        final_axial_compression = 1,
+        powerlaw = 2.0,
+        step1_start = 1,
+        step1_end = 100,
+        step2_start = 100,
+        step2_end = 200,
+    )
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        init_bottom = action_configs.AddInitConfCylindricalConfinement.z_min
+        init_top = action_configs.AddInitConfCylindricalConfinement.z_max
+        init_mid = (init_top + init_bottom) / 2
+        init_height = (init_top - init_bottom)
+
+        step1_top = init_top
+        step1_bottom = init_bottom
+        step1_r = np.sqrt(
+            shared_config.N * action_config.final_per_particle_volume 
+            / (step1_top - step1_bottom) / np.pi
+        )
+        
+        step2_top = init_mid + init_height / 2 / action_config.final_axial_compression
+        step2_bottom = init_mid - init_height / 2 / action_config.final_axial_compression
+        step2_r = np.sqrt(
+            shared_config.N * action_config.final_per_particle_volume 
+            / (step2_top - step2_bottom) / np.pi
+        )
+
+        action_config['step1_r'] = step1_r 
+        action_config['step1_top'] = step1_top
+        action_config['step1_bottom'] = step1_bottom
+        
+        action_config['step2_r'] = step2_r 
+        action_config['step2_top'] = step2_top
+        action_config['step2_bottom'] = step2_bottom
+
+        return shared_config_added_data, action_config
+
+
+    def run_loop(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        if ((self_conf.step1_start <= sim.block <= self_conf.step1_end)
+            or 
+            (self_conf.step2_start <= sim.block <= self_conf.step2_end)
+           ):
+            step = 'step1' if (self_conf.step1_start <= sim.block <= self_conf.step1_end) else 'step2'
+            ks = [k for k in ['r', 'top', 'bottom']
+                  if self_conf[f'{step}_{k}'] is not None]
+
+            cur_vals = {
+                k:sim.context.getParameter(f'cylindrical_confinement_{k}')
+                for k in ks
+            }
+
+            new_vals = {
+                k:cur_vals[k] + (
+                    (cur_vals[k] - self_conf[f'{step}_{k}']) 
+                    * (
+                        ((self_conf[f'{step}_end'] + 1 - sim.block - 1) ** self_conf.powerlaw)
+                        / ((self_conf[f'{step}_end'] + 1 - sim.block ) ** self_conf.powerlaw)
+                        - 1
+                    )
+                )
+                for k in ks
+            }
+
+            for k in ks:
+                sim.context.setParameter(
+                    f'cylindrical_confinement_{k}', new_vals[k] * sim.conlen)
+
+            if 'AddTipsTethering' in action_configs:
+                if 'top' in ks and 'bottom' in ks:
+                    sim.force_dict['Tethers'].setParticleParameters(
+                        0, 0, [0, 0, new_vals['bottom']])
+                    sim.force_dict['Tethers'].setParticleParameters(
+                        1, sim.N-1, [0, 0, new_vals['top']])
+                    sim.force_dict['Tethers'].updateParametersInContext(
+                        sim.context)
+
+        return sim
+
+
 class AddStaticCylinderCompression(SimulationAction):
     _default_params = AttrDict(
         k=1.0,
@@ -491,6 +451,7 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
         helix_radius=None,
         helix_turn_length=None,
         helix_step=None,
+        axial_compression_factor=None,
         random_loop_orientations=True,
     )
 
@@ -498,32 +459,68 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
     
-        if (action_config.helix_radius is not None) and (action_config.helix_turn_length is not None):
-            raise ValueError('Please specify either helix_radius or helix_turn_length')
+        n_params = sum([
+            i is None 
+            for i in [action_config.helix_radius, 
+                      action_config.helix_turn_length, 
+                      action_config.helix_step, 
+                      action_config.axial_compression_factor]])
         
-        if ((action_config.helix_radius is not None) or (action_config.helix_turn_length is not None)) and (action_config.helix_step is None):
-            raise ValueError('Please specify helix_step and either helix_radius or helix_turn_length')
-        
-        if (action_config.helix_step is not None) and ((action_config.helix_radius is None) and (action_config.helix_turn_length is None)):
-            raise ValueError('Please specify helix_step and either helix_radius or helix_turn_length')
-        
+        if n_params not in [0, 2]:
+            raise ValueError('Please specify 0 or 2 out of these four parameters: '
+                             'radius, turn_length, step and axis-to-backbone ratio')
+                
         if (action_config.helix_radius is not None) and (action_config.helix_step is not None):
             helix_radius = action_config.helix_radius
             helix_step = action_config.helix_step
         elif (action_config.helix_turn_length is not None) and (action_config.helix_step is not None):
+            helix_step = action_config.helix_step
             helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
                                       - 
                                       (action_config.helix_step) ** 2 
                                     ) / np.pi / np.pi / 2.0 / 2.0
             if helix_radius_squared <= 0:
                 raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
-
             helix_radius = helix_radius_squared ** 0.5
+            
+        elif (action_config.helix_turn_length is not None) and (action_config.helix_radius is not None):
+            helix_radius = action_config.helix_radius
+            helix_step_squared = ( (action_config.helix_turn_length) ** 2 
+                                      - 
+                                      (2 * np.pi * helix_radius) ** 2 )
+            if helix_step_squared <= 0:
+                raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
+            helix_step = helix_step_squared ** 0.5
+            
+        elif (action_config.axial_compression_factor is not None) and (action_config.helix_radius is not None):
+            helix_radius = action_config.helix_radius
+            helix_step = 2 * np.pi * helix_radius / np.sqrt(action_config.axial_compression_factor ** 2 - 1)
+            
+        elif (action_config.axial_compression_factor is not None) and (action_config.helix_turn_length is not None):
+            helix_step = action_config.helix_turn_length / action_config.axial_compression_factor 
+            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+                                      - 
+                                      (helix_step) ** 2 
+                                    ) / np.pi / np.pi / 2.0 / 2.0
+            if helix_radius_squared <= 0:
+                raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
+            helix_radius = helix_radius_squared ** 0.5
+        elif (action_config.axial_compression_factor is not None) and (action_config.helix_step is not None):
             helix_step = action_config.helix_step
+            helix_turn_length = helix_step * action_config.axial_compression_factor
+            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+                                      - 
+                                      (helix_step) ** 2 
+                                    ) / np.pi / np.pi / 2.0 / 2.0
+            if helix_radius_squared <= 0:
+                raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
+            helix_radius = helix_radius_squared ** 0.5
         else:
             helix_radius = 0
             helix_step = int(1e9)
 
+        action_config['helix_step'] = helix_step
+        action_config['helix_radius'] = helix_radius
 
         shared_config_added_data.initial_conformation = (
             starting_mitotic_conformations.make_helical_loopbrush(
