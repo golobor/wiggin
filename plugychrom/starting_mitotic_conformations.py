@@ -38,8 +38,8 @@ def make_catenated_pair(core_conformation, linking_number, radius, shorten_confo
         return (conformation[int(np.floor(idx))] * (idx - np.floor(idx)) +
                 conformation[int(np.ceil(idx))] * (np.floor(idx+1.0) - idx))
 
-    traj1 = np.zeros(shape=core_conformation.shape)
-    traj2 = np.zeros(shape=core_conformation.shape)
+    # traj1 = np.zeros(shape=core_conformation.shape)
+    # traj2 = np.zeros(shape=core_conformation.shape)
 
     if shorten_conformation:
         core_shift = np.sqrt(
@@ -283,46 +283,105 @@ def make_helical_loopbrush(
     return coords
 
 
-def make_pseudo_globule(step_size, N, segment_length=1,
-                        vonmisesmju=0,
-                        vonmiseskappa=0):
-    u = np.zeros(N // segment_length + 1)
-    i = 0
-    '''ugly, but there is not vonMises-Fisher (on a 3d sphere) in Python'''
-    while True:
-        theta = np.random.vonmises(vonmisesmju, vonmiseskappa)
-        if np.random.random() < np.sin(theta):
-            u[i] = np.cos(theta)
-            i += 1
-            if i >= u.size:
-                break
-    u = -u
+def make_helical_loopbrush_2(
+        L,
+        helix_radius,
+        helix_step,
+        loops,
+        chain_bond_length=1.0,
+        loop_base_length=1.0,
+        random_loop_orientations=False):
+    '''
+    Generate a conformation of a loop brush with a helically folded backbone.
+    In this conformation, loops are folded in half and project radially
+    from the backbone. 
+    
+    Parameters
+    ----------
+    L : int
+        Number of particles.
+    helix_radius: float
+        Radius of the helical backbone.
+    helix_step: float
+        Axial step of the helical backbone.
+    loops: a list of tuples [(int, int)]
+        Particle indices of (start, end) of each loop.
+    bb_linear_density: float
+        The linear density of the backbone, 
+        num_particles / unit of backbone length 
+    random_loop_orientations: bool
+        If True, then align loops at random angles, 
+        otherwise align them along the radius set by
+        the location of their base with respect to the 
+        center of the helix.
 
-    phi = 2.0 * np.pi * np.random.uniform(0., 1., N // segment_length + 1)
-    drs = np.vstack([
-        np.sqrt(1. - u * u) * np.cos(phi),
-        np.sqrt(1. - u * u) * np.sin(phi),
-        u]).T
-    drs = iter(drs)
-    r = np.zeros(shape=(N,3))
-    r[0] = [0,1,0]
+    Returns 
+    -------
+    coords: np.ndarray
+        An Lx3 array of particle coordinates.
+    
+    '''
 
-    i = 1
-    while True:
-        norm_r = r[i-1] / (((r[i-1]**2).sum())**0.5)
-        norm_ort1 = np.cross(norm_r, [1,0,0])
-        norm_ort1 /= (((norm_ort1**2).sum())**0.5)
-        norm_ort2 = np.cross(norm_r, norm_ort1)
-        norm_ort2 /= (((norm_ort2**2).sum())**0.5)
-        dr = next(drs)
-        dr_rotated = norm_r * dr[2] + norm_ort1 * dr[0] + norm_ort2 * dr[1]
+    coords = np.zeros(shape=(L,3))
+    loops = np.asarray(loops)
+    root_loops = loops[looplib.looptools.get_roots(loops)]
+    if root_loops[0,0] != 0:
+        root_loops = np.vstack([[0, root_loops[0,0]], root_loops])
+    if root_loops[-1,1] != L-1:
+        root_loops = np.vstack([root_loops,[root_loops[-1,1],L-1]])
+    loopstarts = np.array([min(i) for i in root_loops])
+    loopends = np.array([max(i) for i in root_loops])
+    looplens = loopends - loopstarts
 
-        for j in range(i, min(N,i+segment_length)):
-            r[j] = r[j-1] + dr_rotated
-        i += segment_length
-        if i >= N:
-            break
+    helix_turn_len = np.sqrt(
+        (2.0 * np.pi * helix_radius)**2 + helix_step**2)
+    ## the numbers below are an approximation, use precise formulas if needed
+    chain_bond_angle_step = 2 * np.pi * chain_bond_length / helix_turn_len
+    loop_base_angle_step = 2 * np.pi * loop_base_length / helix_turn_len 
+    chain_bond_z_step = chain_bond_length / helix_turn_len * helix_step
+    loop_base_z_step = loop_base_length / helix_turn_len * helix_step
 
-    return r
+    coords[root_loops[0,0]] = (helix_radius,0,0)
+    last_angle = loop_base_angle_step
+    last_z = loop_base_z_step
+    for (end, start) in zip(root_loops[:,1][:-1], root_loops[:,0][1:]): 
+        bb_angles = last_angle + np.arange(start-end+1) * chain_bond_angle_step
+        bb_zs = last_z + np.arange(start-end+1) * chain_bond_z_step
+        coords[end:start+1, 0] = np.cos(bb_angles) * helix_radius
+        coords[end:start+1, 1] = np.sin(bb_angles) * helix_radius
+        coords[end:start+1, 2] = bb_zs
+        last_angle = bb_angles[-1] + loop_base_angle_step
+        last_z = bb_zs[-1] + loop_base_z_step
+
+    coords[root_loops[-1,1]] = (
+        np.cos(last_angle) * helix_radius,
+        np.sin(last_angle) * helix_radius,
+        last_z
+    )
+
+    for i in range(len(root_loops)):
+        bb_u = coords[root_loops[i][1]] - coords[root_loops[i][0]]
+        if random_loop_orientations:
+            u = np.cross(bb_u, bb_u+(np.random.random(3)*0.2-0.1))
+            u[2] = 0
+        else:
+            u = (coords[root_loops[i][0]] + coords[root_loops[i][1]])/2
+            u[2] = 0        
+        u /= (u**2).sum()**0.5 
+
+        loop_countour_len = looplens[i] * chain_bond_length
+        if loop_countour_len > loop_base_length:
+            u *= 0.5 * np.sqrt(
+                loop_countour_len ** 2 - loop_base_length ** 2) 
+        else:
+            u *= 0
+        
+        u1 = (u + bb_u) / looplens[i] 
+        u2 = (u - bb_u) / looplens[i]
+        for j in range(looplens[i] // 2):
+            coords[loopstarts[i]+j+1] = coords[loopstarts[i]+j] + u1
+            coords[loopends[i]-j-1]   = coords[loopends[i]-j]   + u2
+
+    return coords
 
 
