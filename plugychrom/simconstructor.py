@@ -1,9 +1,13 @@
-import socket, copy, itertools, os, logging
+import socket
+import copy
+import itertools
+import os
+import logging
 
-import numpy as np
+# import numpy as np
 
 from polychrom import simulation, forces, forcekits, hdf5_format
-
+from . import extra_forces
 
 
 _VERBOSE = True
@@ -262,7 +266,6 @@ class AddChains(SimulationAction):
         except_bonds = False,
     )
 
-
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
@@ -285,7 +288,7 @@ class AddChains(SimulationAction):
                     'k': self_conf.stiffness_k 
                 },
 
-                nonbonded_force_func=forces.polynomial_repulsive,
+                nonbonded_force_func=extra_forces.quartic_repulsives,
                 nonbonded_force_kwargs={
                     'trunc': self_conf.repulsion_e 
                 },
