@@ -93,7 +93,7 @@ class SimulationConstructor:
                             self._sim)
 
                     if sim is None:
-                        break
+                        return
                     else:
                         self._sim = sim
 
@@ -288,7 +288,9 @@ class AddChains(SimulationAction):
                     'k': self_conf.stiffness_k 
                 },
 
-                nonbonded_force_func=extra_forces.quartic_repulsives,
+                nonbonded_force_func=(
+                    None if self_conf.repulsion_e is None 
+                    else extra_forces.quartic_repulsive),
                 nonbonded_force_kwargs={
                     'trunc': self_conf.repulsion_e 
                 },
