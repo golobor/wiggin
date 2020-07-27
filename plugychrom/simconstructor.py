@@ -93,7 +93,6 @@ class SimulationConstructor:
         self.shared_config['folder'] = os.path.join(root_data_folder, name)
         
 
-
 class SimulationAction:
     def __init__(
             self, 
@@ -101,6 +100,7 @@ class SimulationAction:
             ):
 
         self.name = type(self).__name__
+        kwargs.pop('self', None)
         self.params = dict(kwargs)
 
 
@@ -111,14 +111,14 @@ class SimulationAction:
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data = dict()
-        action_config = dict()
+        action_config = copy.deepcopy(self.params)
 
         return shared_config_added_data, action_config
+        
 
-
-    # def __init__():
-    #     kwargs = dict(locals()) # Must be the very first line of the function!
-    #     super().__init__(**kwargs)
+    # def __init__(self):
+    #     params = dict(locals()) # Must be the very first line of the function!
+    #     super().__init__(**params)
 
     # def run_init(self, shared_config, action_configs, sim):
     #     # do not use self.params!
@@ -140,6 +140,7 @@ class SimulationAction:
 
 class InitializeSimulation(SimulationAction):
     def __init__(
+            self,
             N=None,
             computer_name=None,
             platform='CUDA',
@@ -155,9 +156,9 @@ class InitializeSimulation(SimulationAction):
             reporter_block_size=50,
             reporter_blocks_only=False,
             ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
+        params = dict(locals()) # Must be the very first line of the function!
 
-        super().__init__(**kwargs)
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -210,12 +211,13 @@ class InitializeSimulation(SimulationAction):
 class BlockStep(SimulationAction):
     
     def __init__(
+        self,
         num_blocks = 100,
         block_size = int(1e4)
         ):
 
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_loop(self, shared_config, action_configs, sim):
@@ -232,13 +234,14 @@ class BlockStep(SimulationAction):
 
 class LocalEnergyMinimization(SimulationAction):
     def __init__(
+        self,
         max_iterations = 1000,
         tolerance = 1,
         random_offset = 0.1
         ):
 
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -255,6 +258,7 @@ class LocalEnergyMinimization(SimulationAction):
 
 class AddChains(SimulationAction):
     def __init__(
+        self,
         chains = ((0, None, 0)),
         bond_length = 1.0,
         wiggle_dist = 0.025,
@@ -262,8 +266,8 @@ class AddChains(SimulationAction):
         repulsion_e = 2.5, ## TODO: implement np.inf 
         except_bonds = False,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -304,12 +308,13 @@ class AddChains(SimulationAction):
 
 class CrosslinkParallelChains(SimulationAction):
     def __init__(
+        self,
         chains = None,
         bond_length = 1.0,
         wiggle_dist = 0.025,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -366,13 +371,14 @@ class SetInitialConformation(SimulationAction):
 
 class AddCylindricalConfinement(SimulationAction):
     def __init__(
+        self,
         k=0.5,
         r=None,
         top=None,
         bottom=None,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -395,12 +401,13 @@ class AddCylindricalConfinement(SimulationAction):
 
 class AddSphericalConfinement(SimulationAction):
     def __init__(
+        self,
         k=5,
         r='density',
         density= 1. / ((1.5)**3),
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -424,12 +431,13 @@ class AddSphericalConfinement(SimulationAction):
 
 class AddTethering(SimulationAction):
     def __init__(
+        self,
         k=15,
         particles=[],
         positions='current',
         ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -449,13 +457,14 @@ class AddTethering(SimulationAction):
 
 class AddGlobalVariableDynamics(SimulationAction):
     def __init__(
+        self,
         variable_name = None,
         final_value = None,
         inital_block = 0,
         final_block = None
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_loop(self, shared_config, action_configs, sim):

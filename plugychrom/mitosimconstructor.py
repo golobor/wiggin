@@ -17,12 +17,13 @@ logging.basicConfig(level=logging.INFO)
 
 class GenerateSingleLayerLoops(SimulationAction):
     def __init__(
+        self,
         loop_size = 400,
 #        loop_gamma_k = 1,
         loop_spacing = 1,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -63,6 +64,7 @@ class GenerateSingleLayerLoops(SimulationAction):
 
 class GenerateTwoLayerLoops(SimulationAction):
     def __init__(
+        self,
         inner_loop_size = 400,
         outer_loop_size = 400 * 4,
         inner_loop_spacing = 1,
@@ -72,8 +74,8 @@ class GenerateTwoLayerLoops(SimulationAction):
         outer_loop_gamma_k = 1,
     ):
 
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
     def configure(self, shared_config, action_configs):
         import looplib
@@ -121,11 +123,12 @@ class GenerateTwoLayerLoops(SimulationAction):
 
 class AddLoops(SimulationAction):
     def __init__(
+        self,
         wiggle_dist=0.05,
-        bond_length=1.0
+        bond_length=1.0,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -149,10 +152,11 @@ class AddLoops(SimulationAction):
 
 class AddBackboneTethering(SimulationAction):
     def __init__(
-        k=15
+        self,
+        k=15,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -174,12 +178,13 @@ class AddBackboneTethering(SimulationAction):
 
 class AddTipsTethering(SimulationAction):
     def __init__(
+        self,
         k=(0,0,5),
         particles=(0, -1),
         positions='current',
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
 
@@ -203,13 +208,14 @@ class AddTipsTethering(SimulationAction):
 class AddInitConfCylindricalConfinement(SimulationAction):
     # TODO: redo as a configuration step?..
     def __init__(
+        self,
         k=1.0,
         r_max=None,
         z_min=None,
         z_max=None,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -244,14 +250,15 @@ class AddInitConfCylindricalConfinement(SimulationAction):
 
 class AddDynamicCylinderCompression(SimulationAction):
     def __init__(
+        self,
         final_per_particle_volume = 1.5*1.5*1.5,
         final_axial_compression = 1,
         powerlaw = 2.0,
         initial_block = 1,
         final_block = 100,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -322,6 +329,7 @@ class AddDynamicCylinderCompression(SimulationAction):
 
 class AddTwoStepDynamicCylinderCompression(SimulationAction):
     def __init__(
+        self,
         final_per_particle_volume = 1.5*1.5*1.5,
         final_axial_compression = 1,
         powerlaw = 2.0,
@@ -330,8 +338,8 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
         step2_start = 100,
         step2_end = 200
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -416,14 +424,15 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
 
 class AddStaticCylinderCompression(SimulationAction):
     def __init__(
+        self,
         k=1.0,
         z_min=None,
         z_max=None,
         r=None,
         per_particle_volume = 1.5*1.5*1.5
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
     
     def configure(self, shared_config, action_configs):
@@ -474,14 +483,15 @@ class AddStaticCylinderCompression(SimulationAction):
 
 class GenerateLoopBrushInitialConformation(SimulationAction):
     def __init__(
+        self,
         helix_radius=None,
         helix_turn_length=None,
         helix_step=None,
         axial_compression_factor=None,
         random_loop_orientations=True,
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
@@ -566,11 +576,12 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
 
 class SaveConfiguration(SimulationAction):
     def __init__(
+        self,
         backup = True,
-        mode_exists = 'fail' # 'exit' 'overwrite'
+        mode_exists = 'fail', # 'exit' 'overwrite'
     ):
-        kwargs = dict(locals()) # Must be the very first line of the function!
-        super().__init__(**kwargs)
+        params = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**params)
 
 
     def configure(self, shared_config, action_configs):
