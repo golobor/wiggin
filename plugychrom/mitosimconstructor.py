@@ -7,7 +7,7 @@ import numpy as np
 
 from polychrom import forces
 
-from .simconstructor import AttrDict, SimulationAction
+from .simconstructor import SimulationAction
 
 from . import starting_mitotic_conformations
 
@@ -16,11 +16,14 @@ logging.basicConfig(level=logging.INFO)
 
 
 class GenerateSingleLayerLoops(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         loop_size = 400,
 #        loop_gamma_k = 1,
         loop_spacing = 1,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         import looplib
@@ -59,7 +62,7 @@ class GenerateSingleLayerLoops(SimulationAction):
 
 
 class GenerateTwoLayerLoops(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         inner_loop_size = 400,
         outer_loop_size = 400 * 4,
         inner_loop_spacing = 1,
@@ -67,8 +70,10 @@ class GenerateTwoLayerLoops(SimulationAction):
         outer_inner_offset= 1,
         inner_loop_gamma_k = 1,
         outer_loop_gamma_k = 1,
-    )
+    ):
 
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
 
     def configure(self, shared_config, action_configs):
         import looplib
@@ -115,10 +120,13 @@ class GenerateTwoLayerLoops(SimulationAction):
 
 
 class AddLoops(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         wiggle_dist=0.05,
         bond_length=1.0
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -129,8 +137,8 @@ class AddLoops(SimulationAction):
             forces.harmonic_bonds(
                 sim_object=sim,
                 bonds=shared_config['loops'],
-                bondWiggleDistance=self_conf.wiggle_dist,
-                bondLength=self_conf.bond_length,
+                bondWiggleDistance=self_conf['wiggle_dist'],
+                bondLength=self_conf['bond_length'],
                 name='LoopHarmonicBonds',
                 override_checks=True
             )
@@ -140,9 +148,12 @@ class AddLoops(SimulationAction):
 
 
 class AddBackboneTethering(SimulationAction):
-    _default_params = AttrDict(
-        k=15,
-    )
+    def __init__(
+        k=15
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -152,8 +163,8 @@ class AddBackboneTethering(SimulationAction):
         sim.add_force(
             forces.tether_particles(
                 sim_object=sim, 
-                particles=shared_config.backbone, 
-                k=self_conf.k, 
+                particles=shared_config['backbone'], 
+                k=self_conf['k'],
                 positions='current',
                 name='tether_backbone'
             )
@@ -162,11 +173,14 @@ class AddBackboneTethering(SimulationAction):
         return sim
 
 class AddTipsTethering(SimulationAction):
-    _default_params = AttrDict(
-        k=[0,0,5],
-        particles=[0, -1],
+    def __init__(
+        k=(0,0,5),
+        particles=(0, -1),
         positions='current',
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -177,9 +191,9 @@ class AddTipsTethering(SimulationAction):
         sim.add_force(
             forces.tether_particles(
                 sim_object=sim, 
-                particles=self_conf.particles, 
-                k=self_conf.k, 
-                positions=self_conf.positions,
+                particles=self_conf['particles'], 
+                k=self_conf['k'], 
+                positions=self_conf['positions'],
             )
         )
 
@@ -188,12 +202,15 @@ class AddTipsTethering(SimulationAction):
 
 class AddInitConfCylindricalConfinement(SimulationAction):
     # TODO: redo as a configuration step?..
-    _default_params = AttrDict(
+    def __init__(
         k=1.0,
         r_max=None,
         z_min=None,
         z_max=None,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
@@ -215,10 +232,10 @@ class AddInitConfCylindricalConfinement(SimulationAction):
         sim.add_force(
             forces.cylindrical_confinement(
                 sim_object=sim,
-                r=self_conf.r_max,
-                top=self_conf.z_max,
-                bottom=self_conf.z_min, 
-                k=self_conf.k
+                r=self_conf['r_max'],
+                top=self_conf['z_max'],
+                bottom=self_conf['z_min'], 
+                k=self_conf['k']
             )
         )
 
@@ -226,28 +243,31 @@ class AddInitConfCylindricalConfinement(SimulationAction):
 
 
 class AddDynamicCylinderCompression(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         final_per_particle_volume = 1.5*1.5*1.5,
         final_axial_compression = 1,
         powerlaw = 2.0,
         initial_block = 1,
         final_block = 100,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
 
-        init_bottom = action_configs.AddInitConfCylindricalConfinement.z_min
-        init_top = action_configs.AddInitConfCylindricalConfinement.z_max
+        init_bottom = action_configs['AddInitConfCylindricalConfinement']['z_min']
+        init_top = action_configs['AddInitConfCylindricalConfinement']['z_max']
         init_mid = (init_top + init_bottom) / 2
         init_height = (init_top - init_bottom)
 
-        final_top = init_mid + init_height / 2 / action_config.final_axial_compression
-        final_bottom = init_mid - init_height / 2 / action_config.final_axial_compression
+        final_top = init_mid + init_height / 2 / action_config['final_axial_compression']
+        final_bottom = init_mid - init_height / 2 / action_config['final_axial_compression']
 
         final_r = np.sqrt(
-            shared_config.N * action_config.final_per_particle_volume 
+            shared_config['N'] * action_config['final_per_particle_volume'] 
             / (final_top - final_bottom) / np.pi
         )
 
@@ -263,7 +283,7 @@ class AddDynamicCylinderCompression(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if self_conf.initial_block <= sim.block <= self_conf.final_block:
+        if self_conf['initial_block'] <= sim.block <= self_conf['final_block']:
             ks = [k for k in ['r', 'top', 'bottom']
                   if self_conf[f'final_{k}'] is not None]
 
@@ -276,8 +296,8 @@ class AddDynamicCylinderCompression(SimulationAction):
                 k:cur_vals[k] + (
                     (cur_vals[k] - self_conf[f'final_{k}']) 
                     * (
-                        ((self_conf.final_block + 1 - sim.block - 1) ** self_conf.powerlaw)
-                        / ((self_conf.final_block + 1 - sim.block ) ** self_conf.powerlaw)
+                        ((self_conf['final_block'] + 1 - sim.block - 1) ** self_conf['powerlaw'])
+                        / ((self_conf['final_block'] + 1 - sim.block ) ** self_conf['powerlaw'])
                         - 1
                     )
                 )
@@ -301,36 +321,39 @@ class AddDynamicCylinderCompression(SimulationAction):
 
 
 class AddTwoStepDynamicCylinderCompression(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         final_per_particle_volume = 1.5*1.5*1.5,
         final_axial_compression = 1,
         powerlaw = 2.0,
         step1_start = 1,
         step1_end = 100,
         step2_start = 100,
-        step2_end = 200,
-    )
+        step2_end = 200
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
 
-        init_bottom = action_configs.AddInitConfCylindricalConfinement.z_min
-        init_top = action_configs.AddInitConfCylindricalConfinement.z_max
+        init_bottom = action_configs['AddInitConfCylindricalConfinement']['z_min']
+        init_top = action_configs['AddInitConfCylindricalConfinement']['z_max']
         init_mid = (init_top + init_bottom) / 2
         init_height = (init_top - init_bottom)
 
         step1_top = init_top
         step1_bottom = init_bottom
         step1_r = np.sqrt(
-            shared_config.N * action_config.final_per_particle_volume 
+            shared_config['N'] * action_config['final_per_particle_volume'] 
             / (step1_top - step1_bottom) / np.pi
         )
         
-        step2_top = init_mid + init_height / 2 / action_config.final_axial_compression
-        step2_bottom = init_mid - init_height / 2 / action_config.final_axial_compression
+        step2_top = init_mid + init_height / 2 / action_config['final_axial_compression']
+        step2_bottom = init_mid - init_height / 2 / action_config['final_axial_compression']
         step2_r = np.sqrt(
-            shared_config.N * action_config.final_per_particle_volume 
+            shared_config['N'] * action_config['final_per_particle_volume'] 
             / (step2_top - step2_bottom) / np.pi
         )
 
@@ -350,11 +373,11 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if ((self_conf.step1_start <= sim.block <= self_conf.step1_end)
+        if ((self_conf['step1_start'] <= sim.block <= self_conf['step1_end'])
             or 
-            (self_conf.step2_start <= sim.block <= self_conf.step2_end)
+            (self_conf['step2_start'] <= sim.block <= self_conf['step2_end'])
            ):
-            step = 'step1' if (self_conf.step1_start <= sim.block <= self_conf.step1_end) else 'step2'
+            step = 'step1' if (self_conf['step1_start'] <= sim.block <= self_conf['step1_end']) else 'step2'
             ks = [k for k in ['r', 'top', 'bottom']
                   if self_conf[f'{step}_{k}'] is not None]
 
@@ -367,8 +390,8 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
                 k:cur_vals[k] + (
                     (cur_vals[k] - self_conf[f'{step}_{k}']) 
                     * (
-                        ((self_conf[f'{step}_end'] + 1 - sim.block - 1) ** self_conf.powerlaw)
-                        / ((self_conf[f'{step}_end'] + 1 - sim.block ) ** self_conf.powerlaw)
+                        ((self_conf[f'{step}_end'] + 1 - sim.block - 1) ** self_conf['powerlaw'])
+                        / ((self_conf[f'{step}_end'] + 1 - sim.block ) ** self_conf['powerlaw'])
                         - 1
                     )
                 )
@@ -392,37 +415,40 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
 
 
 class AddStaticCylinderCompression(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         k=1.0,
         z_min=None,
         z_max=None,
         r=None,
-        per_particle_volume = 1.5*1.5*1.5,
-    )
+        per_particle_volume = 1.5*1.5*1.5
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
     
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
 
-        if ((action_config.z_min is None) != (action_config.z_max is None)):
+        if ((action_config['z_min'] is None) != (action_config['z_max'] is None)):
             raise ValueError('Both z_min and z_max have to be either specified or left as None.')
-        elif ((action_config.z_min is None) and (action_config.z_max is None)):
+        elif ((action_config['z_min'] is None) and (action_config['z_max'] is None)):
             coords = shared_config['initial_conformation']
             action_config['z_min'] = coords[:,2].min()
             action_config['z_max'] = coords[:,2].max()
         else:
-            action_config['z_min'] = action_config.z_min
-            action_config['z_max'] = action_config.z_max
+            action_config['z_min'] = action_config['z_min']
+            action_config['z_max'] = action_config['z_max']
 
 
-        if ((action_config.r is not None) and (action_config.per_particle_volume is not None)):
+        if ((action_config['r'] is not None) and (action_config['per_particle_volume'] is not None)):
             raise ValueError('Please specify either r or per_particle_volume.')
-        elif ((action_config.r is None) and (action_config.per_particle_volume is None)):
+        elif ((action_config['r'] is None) and (action_config['per_particle_volume'] is None)):
             coords = shared_config['initial_conformation']
             action_config['r'] = ((coords[:,:2]**2).sum(axis=1)**0.5).max()
-        elif ((action_config.r is None) and (action_config.per_particle_volume is not None)):
+        elif ((action_config['r'] is None) and (action_config['per_particle_volume'] is not None)):
             action_config['r'] = np.sqrt(
-                shared_config.N * action_config.per_particle_volume 
+                shared_config['N'] * action_config['per_particle_volume'] 
                 / (action_config['z_max'] - action_config['z_min']) / np.pi
             )
         
@@ -436,10 +462,10 @@ class AddStaticCylinderCompression(SimulationAction):
         sim.add_force(
             forces.cylindrical_confinement(
                 sim_object=sim,
-                r=self_conf.r,
-                top=self_conf.z_max,
-                bottom=self_conf.z_min, 
-                k=self_conf.k
+                r=self_conf['r'],
+                top=self_conf['z_max'],
+                bottom=self_conf['z_min'], 
+                k=self_conf['k']
             )
         )
 
@@ -447,13 +473,16 @@ class AddStaticCylinderCompression(SimulationAction):
 
 
 class GenerateLoopBrushInitialConformation(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         helix_radius=None,
         helix_turn_length=None,
         helix_step=None,
         axial_compression_factor=None,
         random_loop_orientations=True,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
@@ -461,54 +490,54 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
     
         n_params = sum([
             i is None 
-            for i in [action_config.helix_radius, 
-                      action_config.helix_turn_length, 
-                      action_config.helix_step, 
-                      action_config.axial_compression_factor]])
+            for i in [action_config['helix_radius'], 
+                      action_config['helix_turn_length'], 
+                      action_config['helix_step'], 
+                      action_config['axial_compression_factor']]])
         
         if n_params not in [0, 2]:
             raise ValueError('Please specify 0 or 2 out of these four parameters: '
                              'radius, turn_length, step and axis-to-backbone ratio')
                 
-        if (action_config.helix_radius is not None) and (action_config.helix_step is not None):
-            helix_radius = action_config.helix_radius
-            helix_step = action_config.helix_step
-        elif (action_config.helix_turn_length is not None) and (action_config.helix_step is not None):
-            helix_step = action_config.helix_step
-            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+        if (action_config['helix_radius'] is not None) and (action_config['helix_step'] is not None):
+            helix_radius = action_config['helix_radius']
+            helix_step = action_config['helix_step']
+        elif (action_config['helix_turn_length'] is not None) and (action_config['helix_step'] is not None):
+            helix_step = action_config['helix_step']
+            helix_radius_squared = ( (action_config['helix_turn_length']) ** 2 
                                       - 
-                                      (action_config.helix_step) ** 2 
+                                      (action_config['helix_step']) ** 2 
                                     ) / np.pi / np.pi / 2.0 / 2.0
             if helix_radius_squared <= 0:
                 raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
             helix_radius = helix_radius_squared ** 0.5
             
-        elif (action_config.helix_turn_length is not None) and (action_config.helix_radius is not None):
-            helix_radius = action_config.helix_radius
-            helix_step_squared = ( (action_config.helix_turn_length) ** 2 
+        elif (action_config['helix_turn_length'] is not None) and (action_config['helix_radius'] is not None):
+            helix_radius = action_config['helix_radius']
+            helix_step_squared = ( (action_config['helix_turn_length']) ** 2 
                                       - 
                                       (2 * np.pi * helix_radius) ** 2 )
             if helix_step_squared <= 0:
                 raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
             helix_step = helix_step_squared ** 0.5
             
-        elif (action_config.axial_compression_factor is not None) and (action_config.helix_radius is not None):
-            helix_radius = action_config.helix_radius
-            helix_step = 2 * np.pi * helix_radius / np.sqrt(action_config.axial_compression_factor ** 2 - 1)
+        elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_radius'] is not None):
+            helix_radius = action_config['helix_radius']
+            helix_step = 2 * np.pi * helix_radius / np.sqrt(action_config['axial_compression_factor'] ** 2 - 1)
             
-        elif (action_config.axial_compression_factor is not None) and (action_config.helix_turn_length is not None):
-            helix_step = action_config.helix_turn_length / action_config.axial_compression_factor 
-            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+        elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_turn_length'] is not None):
+            helix_step = action_config['helix_turn_length'] / action_config['axial_compression_factor'] 
+            helix_radius_squared = ( (action_config['helix_turn_length']) ** 2 
                                       - 
                                       (helix_step) ** 2 
                                     ) / np.pi / np.pi / 2.0 / 2.0
             if helix_radius_squared <= 0:
                 raise ValueError('The provided values of helix_step and helix_turn_length are incompatible')
             helix_radius = helix_radius_squared ** 0.5
-        elif (action_config.axial_compression_factor is not None) and (action_config.helix_step is not None):
-            helix_step = action_config.helix_step
-            helix_turn_length = helix_step * action_config.axial_compression_factor
-            helix_radius_squared = ( (action_config.helix_turn_length) ** 2 
+        elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_step'] is not None):
+            helix_step = action_config['helix_step']
+            helix_turn_length = helix_step * action_config['axial_compression_factor']
+            helix_radius_squared = ( (action_config['helix_turn_length']) ** 2 
                                       - 
                                       (helix_step) ** 2 
                                     ) / np.pi / np.pi / 2.0 / 2.0
@@ -524,11 +553,11 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
 
         shared_config_added_data.initial_conformation = (
             starting_mitotic_conformations.make_helical_loopbrush(
-                L=shared_config.N,
+                L=shared_config['N'],
                 helix_radius=helix_radius,
                 helix_step=helix_step,
-                loops=shared_config.loops,
-                random_loop_orientations=action_config.random_loop_orientations
+                loops=shared_config['loops'],
+                random_loop_orientations=action_config['random_loop_orientations']
             )
         )
 
@@ -536,10 +565,13 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
 
 
 class SaveConfiguration(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         backup = True,
         mode_exists = 'fail' # 'exit' 'overwrite'
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(

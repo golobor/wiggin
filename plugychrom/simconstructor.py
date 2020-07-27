@@ -14,36 +14,20 @@ _VERBOSE = True
 logging.basicConfig(level=logging.INFO)
 
 
-class AttrDict(dict):
-    @property
-    def __dict__(self):
-        return self
-
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-    def __getstate__(self):
-        return self.__dict__.copy()
-
-    def __setstate__(self, state):
-        self.update(state)
-
-
 class SimulationConstructor:
     def __init__(self, name=None, folder=None):
         self._actions = []
 
         self._sim = None
-        self.shared_config = AttrDict(
+        self.shared_config = dict(
             name=name,
             N=None,
             initial_conformation=None,
             folder=folder,
         )
 
-        self.action_params = AttrDict()
-        self.action_configs = AttrDict()
+        self.action_params = dict()
+        self.action_configs = dict()
 
 
     def add_action(self, action):
@@ -111,28 +95,30 @@ class SimulationConstructor:
 
 
 class SimulationAction:
-    _default_params = AttrDict()
-
     def __init__(
             self, 
-            name=None,
             **kwargs
             ):
-        if name is None:
-            name = type(self).__name__
-        self.name = name
-        self.params = kwargs
+
+        self.name = type(self).__name__
+        self.params = dict(kwargs)
+
+
+    def set_name(self, new_name):
+        self.name = new_name
+        return self
 
 
     def configure(self, shared_config, action_configs):
-        shared_config_added_data = AttrDict()
-        action_config = AttrDict()
-
-        for k, def_v in self._default_params.items():
-            action_config[k] = self.params.get(k, def_v)
+        shared_config_added_data = dict()
+        action_config = dict()
 
         return shared_config_added_data, action_config
 
+
+    # def __init__():
+    #     kwargs = dict(locals()) # Must be the very first line of the function!
+    #     super().__init__(**kwargs)
 
     # def run_init(self, shared_config, action_configs, sim):
     #     # do not use self.params!
@@ -153,23 +139,25 @@ class SimulationAction:
 
 
 class InitializeSimulation(SimulationAction):
+    def __init__(
+            N=None,
+            computer_name=None,
+            platform='CUDA',
+            GPU='0',
+            integrator='variableLangevin',
+            error_tol=0.01,
+            mass=1,
+            collision_rate=0.003,
+            temperature=300,
+            timestep=1.0,
+            max_Ek=1000,
+            PBCbox=False,
+            reporter_block_size=50,
+            reporter_blocks_only=False,
+            ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
 
-    _default_params = AttrDict(
-        N=None,
-        computer_name=None,
-        platform='CUDA',
-        GPU='0',
-        integrator='variableLangevin',
-        error_tol=0.01,
-        mass=1,
-        collision_rate=0.003,
-        temperature=300,
-        timestep=1.0,
-        max_Ek=1000,
-        PBCbox=False,
-        reporter_block_size=50,
-        reporter_blocks_only=False,
-    )
+        super().__init__(**kwargs)
 
 
     def configure(self, shared_config, action_configs):
@@ -204,15 +192,15 @@ class InitializeSimulation(SimulationAction):
             overwrite=False)
 
         sim = simulation.Simulation(
-            platform=self_conf.platform,
-            GPU=self_conf.GPU,
-            integrator=self_conf.integrator,
-            error_tol=self_conf.error_tol,
-            collision_rate=self_conf.collision_rate,
-            mass=self_conf.mass,
-            PBCbox=self_conf.PBCbox,
-            N=shared_config.N,
-            max_Ek=self_conf.max_Ek,
+            platform=self_conf['platform'],
+            GPU=self_conf['GPU'],
+            integrator=self_conf['integrator'],
+            error_tol=self_conf['error_tol'],
+            collision_rate=self_conf['collision_rate'],
+            mass=self_conf['mass'],
+            PBCbox=self_conf['PBCbox'],
+            N=shared_config['N'],
+            max_Ek=self_conf['max_Ek'],
             reporters = [reporter]
         )  
 
@@ -220,51 +208,63 @@ class InitializeSimulation(SimulationAction):
 
 
 class BlockStep(SimulationAction):
-    _default_params = AttrDict(
+    
+    def __init__(
         num_blocks = 100,
-        block_size = int(1e4),
-    )
+        block_size = int(1e4)
+        ):
+
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if (sim.step / self_conf.block_size < self_conf.num_blocks):
-            sim.do_block(self_conf.block_size)  
+        if (sim['step'] / self_conf['block_size'] < self_conf['num_blocks']):
+            sim.do_block(self_conf['block_size'])
             return sim
         else:
             return None
 
 
 class LocalEnergyMinimization(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         max_iterations = 1000,
         tolerance = 1,
         random_offset = 0.1
-    )
+        ):
+
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
         sim.local_energy_minimization(
-                maxIterations=self_conf.max_iterations,
-                tolerance=self_conf.tolerance,
-                random_offset=self_conf.random_offset
+                maxIterations=self_conf['max_iterations'],
+                tolerance=self_conf['tolerance'],
+                random_offset=self_conf['random_offset']
         )
         return sim
  
 
 class AddChains(SimulationAction):
-    _default_params = AttrDict(
-        chains = [(0, None, 0)],
+    def __init__(
+        chains = ((0, None, 0)),
         bond_length = 1.0,
         wiggle_dist = 0.025,
         stiffness_k = None,
         repulsion_e = 2.5, ## TODO: implement np.inf 
         except_bonds = False,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -274,28 +274,28 @@ class AddChains(SimulationAction):
         sim.add_force(
             forcekits.polymer_chains(
                 sim,
-                chains=self_conf.chains,
+                chains=self_conf['chains'],
                 bond_force_func=forces.harmonic_bonds,
                 bond_force_kwargs={
-                    'bondLength': self_conf.bond_length,
-                    'bondWiggleDistance': self_conf.wiggle_dist,
+                    'bondLength': self_conf['bond_length'],
+                    'bondWiggleDistance': self_conf['wiggle_dist'],
                 },
 
                 angle_force_func=(
-                    None if self_conf.stiffness_k is None 
+                    None if self_conf['stiffness_k'] is None 
                     else forces.angle_force),
                 angle_force_kwargs={
-                    'k': self_conf.stiffness_k 
+                    'k': self_conf['stiffness_k'] 
                 },
 
                 nonbonded_force_func=(
-                    None if self_conf.repulsion_e is None 
+                    None if self_conf['repulsion_e'] is None 
                     else extra_forces.quartic_repulsive),
                 nonbonded_force_kwargs={
-                    'trunc': self_conf.repulsion_e 
+                    'trunc': self_conf['repulsion_e'] 
                 },
 
-                except_bonds=self_conf.except_bonds
+                except_bonds=self_conf['except_bonds']
             )
         )
 
@@ -303,13 +303,15 @@ class AddChains(SimulationAction):
 
 
 class CrosslinkParallelChains(SimulationAction):
-    
-    _default_params = AttrDict(
+    def __init__(
         chains = None,
         bond_length = 1.0,
         wiggle_dist = 0.025,
-    )
-    
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
+
     def configure(self, shared_config, action_configs):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
@@ -342,8 +344,8 @@ class CrosslinkParallelChains(SimulationAction):
             forces.harmonic_bonds(
                 sim,
                 bonds=bonds,
-                bondLength= self_conf.bond_length,
-                bondWiggleDistance= self_conf.wiggle_dist,
+                bondLength= self_conf['bond_length'],
+                bondWiggleDistance= self_conf['wiggle_dist'],
                 name='ParallelChainsCrosslinkBonds'
             )
         )
@@ -357,18 +359,21 @@ class SetInitialConformation(SimulationAction):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         # self_conf = action_configs[self.name]
-        sim.set_data(shared_config.initial_conformation)
+        sim.set_data(shared_config['initial_conformation'])
 
         return sim
 
 
 class AddCylindricalConfinement(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         k=0.5,
         r=None,
         top=None,
         bottom=None,
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -378,10 +383,10 @@ class AddCylindricalConfinement(SimulationAction):
         sim.add_force(
             forces.cylindrical_confinement(
                 sim_object=sim,
-                r=self_conf.r,
-                top=self_conf.top,
-                bottom=self_conf.bottom, 
-                k=self_conf.k
+                r=self_conf['r'],
+                top=self_conf['top'],
+                bottom=self_conf['bottom'], 
+                k=self_conf['k']
             )
         )
 
@@ -389,11 +394,14 @@ class AddCylindricalConfinement(SimulationAction):
 
 
 class AddSphericalConfinement(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         k=5,
         r='density',
         density= 1. / ((1.5)**3),
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -403,9 +411,9 @@ class AddSphericalConfinement(SimulationAction):
         sim.add_force(
             forces.spherical_confinement(
                 sim,
-                r=self_conf.r,  # radius... by default uses certain density
-                k=self_conf.k,  # How steep the walls are
-                density=self_conf.density,    # target density, measured in particles
+                r=self_conf['r'],  # radius... by default uses certain density
+                k=self_conf['k'],  # How steep the walls are
+                density=self_conf['density'],    # target density, measured in particles
                                               # per cubic nanometer (bond size is 1 nm)
                 # name='spherical_confinement'
             )
@@ -415,11 +423,14 @@ class AddSphericalConfinement(SimulationAction):
 
 
 class AddTethering(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         k=15,
         particles=[],
         positions='current',
-    )
+        ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -429,34 +440,37 @@ class AddTethering(SimulationAction):
         sim.add_force(
             forces.tether_particles(
                 sim_object=sim, 
-                particles=self_conf.particles, 
-                k=self_conf.k, 
-                positions=self_conf.positions,
+                particles=self_conf['particles'], 
+                k=self_conf['k'], 
+                positions=self_conf['positions'],
             )
         )
 
 
 class AddGlobalVariableDynamics(SimulationAction):
-    _default_params = AttrDict(
+    def __init__(
         variable_name = None,
         final_value = None,
         inital_block = 0,
         final_block = None
-    )
+    ):
+        kwargs = dict(locals()) # Must be the very first line of the function!
+        super().__init__(**kwargs)
+
 
     def run_loop(self, shared_config, action_configs, sim):
         # do not use self.params!
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if self_conf.inital_block <= sim.block <= self_conf.final_block:
-            cur_val = sim.context.getParameter(self_conf.variable_name)
+        if self_conf['inital_block'] <= sim.block <= self_conf['final_block']:
+            cur_val = sim.context.getParameter(self_conf['variable_name'])
 
             new_val = cur_val + (
-                    (self_conf.final_value - cur_val) 
-                    / (self_conf.final_block - sim.block + 1)
+                    (self_conf['final_value'] - cur_val) 
+                    / (self_conf['final_block'] - sim.block + 1)
                     )
-            sim.context.setParameter(self_conf.variable_name, new_val)
+            sim.context.setParameter(self_conf['variable_name'], new_val)
 
 
 # class SaveConformationTxt(SimulationAction):
