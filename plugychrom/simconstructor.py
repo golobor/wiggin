@@ -35,6 +35,12 @@ class SimConstructor:
         
         Parameters:
             action: SimAction
+            order: (float, float, float)
+                If provided, the three numbers specify the order of the execution of 
+                .configure(), .run_init() and .run_loop(). If not provided,
+                the order of execution is calculated based on the order of addition
+                of actions into the system.
+                Use at your peril!
 
         """
         if action.name in self.action_params:
@@ -111,7 +117,7 @@ class SimConstructor:
     def auto_name(self, root_data_folder = './data/'):
         name = []
         for _, params in self.action_params.items():
-            for k,v in params.items():
+            for k, v in params.items():
                 name += ['_', k, '-', str(v)]
 
         name = ''.join(name[1:])
