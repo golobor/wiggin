@@ -7,7 +7,7 @@ import numpy as np
 
 from polychrom import forces
 
-from .simconstructor import SimulationAction
+from .simconstructor import SimAction
 
 from . import starting_mitotic_conformations
 
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 
-class GenerateSingleLayerLoops(SimulationAction):
+class GenerateSingleLayerLoops(SimAction):
     def __init__(
         self,
         loop_size = 400,
@@ -62,7 +62,7 @@ class GenerateSingleLayerLoops(SimulationAction):
         return shared_config_added_data, action_config
 
 
-class GenerateTwoLayerLoops(SimulationAction):
+class GenerateTwoLayerLoops(SimAction):
     def __init__(
         self,
         inner_loop_size = 400,
@@ -121,7 +121,7 @@ class GenerateTwoLayerLoops(SimulationAction):
         return shared_config_added_data, action_config
 
 
-class AddLoops(SimulationAction):
+class AddLoops(SimAction):
     def __init__(
         self,
         wiggle_dist=0.05,
@@ -148,7 +148,7 @@ class AddLoops(SimulationAction):
         )
 
 
-class AddBackboneTethering(SimulationAction):
+class AddBackboneTethering(SimAction):
     def __init__(
         self,
         k=15,
@@ -172,7 +172,7 @@ class AddBackboneTethering(SimulationAction):
             )
         )
 
-class AddTipsTethering(SimulationAction):
+class AddTipsTethering(SimAction):
     def __init__(
         self,
         k=(0,0,5),
@@ -199,7 +199,7 @@ class AddTipsTethering(SimulationAction):
         )
 
 
-class AddInitConfCylindricalConfinement(SimulationAction):
+class AddInitConfCylindricalConfinement(SimAction):
     # TODO: redo as a configuration step?..
     def __init__(
         self,
@@ -240,7 +240,7 @@ class AddInitConfCylindricalConfinement(SimulationAction):
         )
 
 
-class AddDynamicCylinderCompression(SimulationAction):
+class AddDynamicCylinderCompression(SimAction):
     def __init__(
         self,
         final_per_particle_volume = 1.5*1.5*1.5,
@@ -317,7 +317,7 @@ class AddDynamicCylinderCompression(SimulationAction):
                         sim.context)
 
 
-class AddTwoStepDynamicCylinderCompression(SimulationAction):
+class AddTwoStepDynamicCylinderCompression(SimAction):
     def __init__(
         self,
         final_per_particle_volume = 1.5*1.5*1.5,
@@ -410,7 +410,7 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
                         sim.context)
 
 
-class AddStaticCylinderCompression(SimulationAction):
+class AddStaticCylinderCompression(SimAction):
     def __init__(
         self,
         k=1.0,
@@ -467,7 +467,7 @@ class AddStaticCylinderCompression(SimulationAction):
         )
 
 
-class GenerateLoopBrushInitialConformation(SimulationAction):
+class GenerateLoopBrushInitialConformation(SimAction):
     def __init__(
         self,
         helix_radius=None,
@@ -560,7 +560,7 @@ class GenerateLoopBrushInitialConformation(SimulationAction):
         return shared_config_added_data, action_config
 
 
-class SaveConfiguration(SimulationAction):
+class SaveConfiguration(SimAction):
     def __init__(
         self,
         backup = True,

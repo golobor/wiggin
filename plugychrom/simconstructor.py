@@ -13,7 +13,7 @@ _VERBOSE = True
 logging.basicConfig(level=logging.INFO)
 
 
-class SimulationConstructor:
+class SimConstructor:
     def __init__(self, name=None, folder=None):
         self._actions = []
 
@@ -29,17 +29,28 @@ class SimulationConstructor:
         self.action_configs = dict()
 
 
-    def add_action(self, action):
+    def add_action(self, action, order=(None, None, None)):
+        """
+        Add an action to the constructor.
+        
+        Parameters:
+            action: SimAction
+
+        """
         if action.name in self.action_params:
             raise ValueError(
                 f'Action {action.name} was already added to the constructor!')
         self.action_params[action.name] = copy.deepcopy(action.params)
 
-        self._actions.append(action)
+        if len(order) != 3:
+            raise ValueError('order must be a tuple of three numbers or Nones')
+        order = tuple([len(self._actions) if i is None else i for i in order])
+        
+        self._actions.append((order,action))
 
 
     def configure(self):
-        for action in self._actions:
+        for order, action in sorted(self._actions, key=lambda x: x[0][0]):
             if _VERBOSE:
                 logging.info(f'Configuring action {action.name}...')
 
@@ -60,7 +71,7 @@ class SimulationConstructor:
 
 
     def run(self):
-        for action in self._actions:
+        for order, action in sorted(self._actions, key=lambda x: x[0][1]):
             if hasattr(action, 'run_init'):
                 new_sim = action.run_init(
                         self.shared_config, 
@@ -77,9 +88,8 @@ class SimulationConstructor:
                                      'Allowed values are: polychrom.simulation.Simulation, None or False')
 
 
-
         while True:
-            for action in self._actions:
+            for order, action in sorted(self._actions, key=lambda x: x[0][2]):
                 if hasattr(action, 'run_loop'):
                     new_sim = action.run_loop(
                             self.shared_config, 
@@ -109,7 +119,7 @@ class SimulationConstructor:
         self.shared_config['folder'] = os.path.join(root_data_folder, name)
         
 
-class SimulationAction:
+class SimAction:
     def __init__(
             self, 
             **kwargs
@@ -150,7 +160,7 @@ class SimulationAction:
 
 
 
-class InitializeSimulation(SimulationAction):
+class InitializeSimulation(SimAction):
     def __init__(
             self,
             N=None,
@@ -193,7 +203,7 @@ class InitializeSimulation(SimulationAction):
         if shared_config['folder'] is None:
             raise ValueError(
                 'The data folder is not set, please specify it in '
-                'SimulationConstructor() or via NameSimulationByParams()'
+                'SimConstructor() or via NameSimulationByParams()'
             )
 
         os.makedirs(shared_config['folder'], exist_ok=True)
@@ -220,7 +230,7 @@ class InitializeSimulation(SimulationAction):
         return sim
 
 
-class BlockStep(SimulationAction):
+class BlockStep(SimAction):
     
     def __init__(
         self,
@@ -244,7 +254,7 @@ class BlockStep(SimulationAction):
             return False
 
 
-class LocalEnergyMinimization(SimulationAction):
+class LocalEnergyMinimization(SimAction):
     def __init__(
         self,
         max_iterations = 1000,
@@ -267,7 +277,7 @@ class LocalEnergyMinimization(SimulationAction):
         )
  
 
-class AddChains(SimulationAction):
+class AddChains(SimAction):
     def __init__(
         self,
         chains = ((0, None, 0)),
@@ -315,7 +325,7 @@ class AddChains(SimulationAction):
         )
 
 
-class CrosslinkParallelChains(SimulationAction):
+class CrosslinkParallelChains(SimAction):
     def __init__(
         self,
         chains = None,
@@ -365,7 +375,7 @@ class CrosslinkParallelChains(SimulationAction):
         )
 
 
-class SetInitialConformation(SimulationAction):
+class SetInitialConformation(SimAction):
 
     def run_init(self, shared_config, action_configs, sim):
         # do not use self.params!
@@ -376,7 +386,7 @@ class SetInitialConformation(SimulationAction):
         return sim
 
 
-class AddCylindricalConfinement(SimulationAction):
+class AddCylindricalConfinement(SimAction):
     def __init__(
         self,
         k=0.5,
@@ -405,7 +415,7 @@ class AddCylindricalConfinement(SimulationAction):
 
 
 
-class AddSphericalConfinement(SimulationAction):
+class AddSphericalConfinement(SimAction):
     def __init__(
         self,
         k=5,
@@ -433,7 +443,7 @@ class AddSphericalConfinement(SimulationAction):
         )
 
 
-class AddTethering(SimulationAction):
+class AddTethering(SimAction):
     def __init__(
         self,
         k=15,
@@ -459,7 +469,7 @@ class AddTethering(SimulationAction):
         )
 
 
-class AddGlobalVariableDynamics(SimulationAction):
+class AddGlobalVariableDynamics(SimAction):
     def __init__(
         self,
         variable_name = None,
@@ -486,7 +496,7 @@ class AddGlobalVariableDynamics(SimulationAction):
             sim.context.setParameter(self_conf['variable_name'], new_val)
 
 
-# class SaveConformationTxt(SimulationAction):
+# class SaveConformationTxt(SimAction):
 
 #     def run_loop(self, shared_config, action_configs, sim):
 #         # do not use self.params!
