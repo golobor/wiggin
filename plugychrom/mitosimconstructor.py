@@ -147,8 +147,6 @@ class AddLoops(SimulationAction):
             )
         )
 
-        return sim
-
 
 class AddBackboneTethering(SimulationAction):
     def __init__(
@@ -173,8 +171,6 @@ class AddBackboneTethering(SimulationAction):
                 name='tether_backbone'
             )
         )
-
-        return sim
 
 class AddTipsTethering(SimulationAction):
     def __init__(
@@ -201,8 +197,6 @@ class AddTipsTethering(SimulationAction):
                 positions=self_conf['positions'],
             )
         )
-
-        return sim
 
 
 class AddInitConfCylindricalConfinement(SimulationAction):
@@ -244,8 +238,6 @@ class AddInitConfCylindricalConfinement(SimulationAction):
                 k=self_conf['k']
             )
         )
-
-        return sim
 
 
 class AddDynamicCylinderCompression(SimulationAction):
@@ -323,8 +315,6 @@ class AddDynamicCylinderCompression(SimulationAction):
                         1, sim.N-1, [0, 0, new_vals['top']])
                     sim.force_dict['Tethers'].updateParametersInContext(
                         sim.context)
-
-        return sim
 
 
 class AddTwoStepDynamicCylinderCompression(SimulationAction):
@@ -419,8 +409,6 @@ class AddTwoStepDynamicCylinderCompression(SimulationAction):
                     sim.force_dict['Tethers'].updateParametersInContext(
                         sim.context)
 
-        return sim
-
 
 class AddStaticCylinderCompression(SimulationAction):
     def __init__(
@@ -477,8 +465,6 @@ class AddStaticCylinderCompression(SimulationAction):
                 k=self_conf['k']
             )
         )
-
-        return sim
 
 
 class GenerateLoopBrushInitialConformation(SimulationAction):

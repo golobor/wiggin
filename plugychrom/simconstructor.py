@@ -1,6 +1,5 @@
 import socket
 import copy
-import itertools
 import os
 import logging
 
@@ -40,7 +39,7 @@ class SimulationConstructor:
 
 
     def configure(self):
-        for action in itertools.chain(self._actions):
+        for action in self._actions:
             if _VERBOSE:
                 logging.info(f'Configuring action {action.name}...')
 
@@ -53,33 +52,50 @@ class SimulationConstructor:
                 self.action_configs)
 
             assert conf_res is not None, (
-                    f'Action {action.name} must return two configs in .configure()!')
+                    f'{action.name}.configure() must return two dict() configs!')
 
             shared_config_added_data, action_config = conf_res
-            self.shared_config.update(shared_config_added_data) 
+            self.shared_config.update(shared_config_added_data)
             self.action_configs[action.name] = action_config
 
 
     def run(self):
         for action in self._actions:
             if hasattr(action, 'run_init'):
-                self._sim = action.run_init(
+                new_sim = action.run_init(
                         self.shared_config, 
                         self.action_configs, 
                         self._sim)
+                if new_sim is None:
+                    continue
+                elif issubclass(type(new_sim), simulation.Simulation):
+                    self._sim = new_sim
+                elif new_sim is False:
+                    return
+                else:
+                    raise ValueError(f'{action.name}.run_init() returned {new_sim}. '
+                                     'Allowed values are: polychrom.simulation.Simulation, None or False')
+
+
 
         while True:
             for action in self._actions:
                 if hasattr(action, 'run_loop'):
-                    sim = action.run_loop(
+                    new_sim = action.run_loop(
                             self.shared_config, 
                             self.action_configs, 
                             self._sim)
 
-                    if sim is None:
-                        return
+                    if new_sim is None:
+                        continue
+                    elif issubclass(type(new_sim), simulation.Simulation):
+                        self._sim = new_sim
+                    elif new_sim is False:
+                        break
                     else:
-                        self._sim = sim
+                        raise ValueError(f'{action.name}.run_loop() returned {new_sim}. '
+                                        'Allowed values are: polychrom.simulation.Simulation, None or False')
+
 
 
     def auto_name(self, root_data_folder = './data/'):
@@ -125,8 +141,6 @@ class SimulationAction:
     #     # only use parameters from action_configs[self.name] and shared_config
     #     self_conf = action_configs[self.name]
 
-    # TODO: i always forget to return sim, consider returning an error code?
-    #     return sim
 
 
     # def run_loop(self, shared_config, action_configs, sim):
@@ -134,8 +148,6 @@ class SimulationAction:
     #     # only use parameters from action_configs[self.name] and shared_config
     #     self_conf = action_configs[self.name]
 
-    # TODO: i always forget to return sim, consider returning an error code?
-    #     return sim
 
 
 class InitializeSimulation(SimulationAction):
@@ -229,7 +241,7 @@ class BlockStep(SimulationAction):
             sim.do_block(self_conf['block_size'])
             return sim
         else:
-            return None
+            return False
 
 
 class LocalEnergyMinimization(SimulationAction):
@@ -253,7 +265,6 @@ class LocalEnergyMinimization(SimulationAction):
                 tolerance=self_conf['tolerance'],
                 random_offset=self_conf['random_offset']
         )
-        return sim
  
 
 class AddChains(SimulationAction):
@@ -302,8 +313,6 @@ class AddChains(SimulationAction):
                 except_bonds=self_conf['except_bonds']
             )
         )
-
-        return sim
 
 
 class CrosslinkParallelChains(SimulationAction):
@@ -355,8 +364,6 @@ class CrosslinkParallelChains(SimulationAction):
             )
         )
 
-        return sim
-
 
 class SetInitialConformation(SimulationAction):
 
@@ -396,7 +403,6 @@ class AddCylindricalConfinement(SimulationAction):
             )
         )
 
-        return sim
 
 
 class AddSphericalConfinement(SimulationAction):
@@ -425,8 +431,6 @@ class AddSphericalConfinement(SimulationAction):
                 # name='spherical_confinement'
             )
         )
-
-        return sim
 
 
 class AddTethering(SimulationAction):
