@@ -1,8 +1,8 @@
 import os
 # import numpy as np
 
-import plugychrom.simconstructor as smc
-import plugychrom.mitosimconstructor as msmc
+import wiggin.simconstructor as smc
+import wiggin.mitosimconstructor as msmc
 
 def nameSimulation(simconstructor, base_folder = '../data/'):
     name = []
