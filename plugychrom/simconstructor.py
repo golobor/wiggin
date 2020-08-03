@@ -2,6 +2,8 @@ import socket
 import copy
 import os
 import logging
+import inspect
+
 
 # import numpy as np
 
@@ -26,6 +28,7 @@ class SimConstructor:
         )
 
         self.action_params = dict()
+        self._default_action_params = dict()
         self.action_configs = dict()
 
 
@@ -47,6 +50,11 @@ class SimConstructor:
             raise ValueError(
                 f'Action {action.name} was already added to the constructor!')
         self.action_params[action.name] = copy.deepcopy(action.params)
+        self._default_action_params[action.name] = {
+                k: v.default
+                for k, v in inspect.signature(action.__init__).parameters.items()
+                if v.default is not inspect.Parameter.empty
+        }
 
         if len(order) != 3:
             raise ValueError('order must be a tuple of three numbers or Nones')
@@ -116,9 +124,17 @@ class SimConstructor:
 
     def auto_name(self, root_data_folder = './data/'):
         name = []
-        for _, params in self.action_params.items():
+        for action_name, params in self.action_params.items():
+            default_params = self._default_action_params.get(action_name, {})
+            print('!!!')
+            print(default_params)
+            print('!!!')
+            print(params)
+            print('!!!')
+            print('!!!')
             for k, v in params.items():
-                name += ['_', k, '-', str(v)]
+                if k in default_params and v != default_params[k]:
+                    name += ['_', k, '-', str(v)]
 
         name = ''.join(name[1:])
         self.shared_config['name'] = name
@@ -133,6 +149,7 @@ class SimAction:
 
         self.name = type(self).__name__
         kwargs.pop('self', None)
+        kwargs.pop('__class__', None)
         self.params = dict(kwargs)
 
 
@@ -149,7 +166,7 @@ class SimAction:
         
 
     # def __init__(self):
-    #     params = dict(locals()) # Must be the very first line of the function!
+    #     params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
     #     super().__init__(**params)
 
     # def run_init(self, shared_config, action_configs, sim):
@@ -184,7 +201,7 @@ class InitializeSimulation(SimAction):
             reporter_block_size=50,
             reporter_blocks_only=False,
             ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
 
         super().__init__(**params)
 
@@ -244,7 +261,7 @@ class BlockStep(SimAction):
         block_size = int(1e4)
         ):
 
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -253,7 +270,7 @@ class BlockStep(SimAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
-        if (sim['step'] / self_conf['block_size'] < self_conf['num_blocks']):
+        if (sim.step / self_conf['block_size'] < self_conf['num_blocks']):
             sim.do_block(self_conf['block_size'])
             return sim
         else:
@@ -268,7 +285,7 @@ class LocalEnergyMinimization(SimAction):
         random_offset = 0.1
         ):
 
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -286,14 +303,14 @@ class LocalEnergyMinimization(SimAction):
 class AddChains(SimAction):
     def __init__(
         self,
-        chains = ((0, None, 0)),
+        chains = ((0, None, 0),),
         bond_length = 1.0,
         wiggle_dist = 0.025,
         stiffness_k = None,
         repulsion_e = 2.5, ## TODO: implement np.inf 
         except_bonds = False,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -338,7 +355,7 @@ class CrosslinkParallelChains(SimAction):
         bond_length = 1.0,
         wiggle_dist = 0.025,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -400,7 +417,7 @@ class AddCylindricalConfinement(SimAction):
         top=None,
         bottom=None,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -428,7 +445,7 @@ class AddSphericalConfinement(SimAction):
         r='density',
         density= 1. / ((1.5)**3),
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -456,7 +473,7 @@ class AddTethering(SimAction):
         particles=[],
         positions='current',
         ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -483,7 +500,7 @@ class AddGlobalVariableDynamics(SimAction):
         inital_block = 0,
         final_block = None
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 

@@ -22,7 +22,7 @@ class GenerateSingleLayerLoops(SimAction):
 #        loop_gamma_k = 1,
         loop_spacing = 1,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -74,7 +74,7 @@ class GenerateTwoLayerLoops(SimAction):
         outer_loop_gamma_k = 1,
     ):
 
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
     def configure(self, shared_config, action_configs):
@@ -127,7 +127,7 @@ class AddLoops(SimAction):
         wiggle_dist=0.05,
         bond_length=1.0,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -153,7 +153,7 @@ class AddBackboneTethering(SimAction):
         self,
         k=15,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -179,7 +179,7 @@ class AddTipsTethering(SimAction):
         particles=(0, -1),
         positions='current',
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -208,7 +208,7 @@ class AddInitConfCylindricalConfinement(SimAction):
         z_min=None,
         z_max=None,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -249,7 +249,7 @@ class AddDynamicCylinderCompression(SimAction):
         initial_block = 1,
         final_block = 100,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -328,7 +328,7 @@ class AddTwoStepDynamicCylinderCompression(SimAction):
         step2_start = 100,
         step2_end = 200
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -419,7 +419,7 @@ class AddStaticCylinderCompression(SimAction):
         r=None,
         per_particle_volume = 1.5*1.5*1.5
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
     
@@ -476,7 +476,7 @@ class GenerateLoopBrushInitialConformation(SimAction):
         axial_compression_factor=None,
         random_loop_orientations=True,
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -547,7 +547,7 @@ class GenerateLoopBrushInitialConformation(SimAction):
         action_config['helix_step'] = helix_step
         action_config['helix_radius'] = helix_radius
 
-        shared_config_added_data.initial_conformation = (
+        shared_config_added_data['initial_conformation'] = (
             starting_mitotic_conformations.make_helical_loopbrush(
                 L=shared_config['N'],
                 helix_radius=helix_radius,
@@ -566,7 +566,7 @@ class SaveConfiguration(SimAction):
         backup = True,
         mode_exists = 'fail', # 'exit' 'overwrite'
     ):
-        params = dict(locals()) # Must be the very first line of the function!
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
 
 
