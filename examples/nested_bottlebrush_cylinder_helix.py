@@ -4,7 +4,6 @@
 import wiggin.simconstructor as smc
 import wiggin.mitosimconstructor as msmc
 
-
 c = smc.SimConstructor()
 
 
@@ -82,7 +81,7 @@ c.add_action(
     ),
 )
 
-c.auto_name(root_data_folder = './data/')
+c.auto_name(root_data_folder='./data/nested_bottlebrush_cylinder_helix/')
 
 c.add_action(
     msmc.SaveConfiguration()

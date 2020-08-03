@@ -4,17 +4,6 @@ import os
 import wiggin.simconstructor as smc
 import wiggin.mitosimconstructor as msmc
 
-def nameSimulation(simconstructor, base_folder = '../data/'):
-    name = []
-    for action, params in simconstructor.action_params.items():
-        for k,v in params.items():
-            name += ['_', k, '-', str(v)]
-
-    name = ''.join(name[1:])
-    simconstructor.shared_config['name'] = name
-    simconstructor.shared_config['folder'] = os.path.join(base_folder, name)
-
-
 c = smc.SimConstructor()
 
 c.add_action(
@@ -83,6 +72,8 @@ c.add_action(
 #        block_size=10000
     ),
 )
+
+c.auto_name(root_data_folder='./data/nested_bottlebrush_cylinder/')
 
 c.add_action(
     smc.SaveConformation()
