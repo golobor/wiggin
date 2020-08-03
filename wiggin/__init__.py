@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Plugychrom
-~~~~~~~~~~
+wiggin
+~~~~~~
 
-PlugyChrom is an experimental high-level modular framework for building polymer simulations.
+wiggin is an experimental high-level modular framework for building polymer simulations.
 
-:copyright: (c) 2019 Anton Goloborodko
+:copyright: (c) 2019-2020 Anton Goloborodko
 :author: Anton Goloborodko
 :license: MIT
 
