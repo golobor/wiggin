@@ -1,8 +1,8 @@
 import os
-import numpy as np
+# import numpy as np
 
-import plugychrom.simconstructor as smc
-import plugychrom.mitosimconstructor as msmc
+import wiggin.simconstructor as smc
+import wiggin.mitosimconstructor as msmc
 
 def nameSimulation(simconstructor, base_folder = '../data/'):
     name = []
@@ -15,13 +15,13 @@ def nameSimulation(simconstructor, base_folder = '../data/'):
     simconstructor.shared_config['folder'] = os.path.join(base_folder, name)
 
 
-c = smc.SimulationConstructor()
+c = smc.SimConstructor()
 
 c.add_action(
     smc.InitializeSimulation(
         N=200*4*500,
-        #platform='CPU'
-        GPU='1',
+        # platform='CPU'
+        # GPU='0',
         error_tol=0.01,
         collision_rate=0.003,
 #        max_Ek=1000,

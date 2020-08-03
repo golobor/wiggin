@@ -32,7 +32,7 @@ def _read(*parts, **kwargs):
 def get_version():
     version = re.search(
         r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
-        _read('plugychrom', '__init__.py'),
+        _read('wiggin', '__init__.py'),
         re.MULTILINE).group(1)
     return version
 
@@ -49,7 +49,7 @@ install_requires = [
 
 packages = find_packages()
 setup(
-    name='plugychrom',
+    name='wiggin',
     author='Anton Goloborodko',
     author_email='goloborodko.anton@gmail.com',
     version=get_version(),
@@ -57,7 +57,7 @@ setup(
     description='An experimental high-level modular framework for building polymer simulations.',
     long_description=get_long_description(),
     keywords=['polymer simulations',],
-    url='https://github.com/golobor/plugychrom',
+    url='https://github.com/golobor/wiggin',
     packages=find_packages(),
     # ext_modules = cythonize(extensions),
     zip_safe=False,

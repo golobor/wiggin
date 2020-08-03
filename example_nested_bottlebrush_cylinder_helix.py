@@ -1,11 +1,11 @@
-import os
-import numpy as np
+# import os
+# import numpy as np
 
-import plugychrom.simconstructor as smc
-import plugychrom.mitosimconstructor as msmc
+import wiggin.simconstructor as smc
+import wiggin.mitosimconstructor as msmc
 
 
-c = smc.SimulationConstructor()
+c = smc.SimConstructor()
 
 
 c.add_action(
