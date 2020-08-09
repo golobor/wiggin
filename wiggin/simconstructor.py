@@ -115,7 +115,7 @@ class SimConstructor:
                     elif issubclass(type(new_sim), simulation.Simulation):
                         self._sim = new_sim
                     elif new_sim is False:
-                        break
+                        return
                     else:
                         raise ValueError(f'{action.name}.run_loop() returned {new_sim}. '
                                         'Allowed values are: polychrom.simulation.Simulation, None or False')

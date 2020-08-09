@@ -19,7 +19,7 @@ class GenerateSingleLayerLoops(SimAction):
     def __init__(
         self,
         loop_size = 400,
-#        loop_gamma_k = 1,
+        # loop_gamma_k = 1,
         loop_spacing = 1,
     ):
         params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
