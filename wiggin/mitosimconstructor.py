@@ -14,15 +14,15 @@ from . import starting_mitotic_conformations
 logging.basicConfig(level=logging.INFO)
 
 
-
 class GenerateSingleLayerLoops(SimAction):
     def __init__(
         self,
-        loop_size = 400,
+        loop_size=400,
         # loop_gamma_k = 1,
-        loop_spacing = 1,
+        loop_spacing=1,
+        chain_idxs=None,
     ):
-        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        params = {k: v for k, v in locals().items() if k not in ['self']}  # This line must be the first in the function.
         super().__init__(**params)
 
 
@@ -34,18 +34,33 @@ class GenerateSingleLayerLoops(SimAction):
         shared_config_added_data, action_config = super().configure(
             shared_config, action_configs)
 
-        if 'loop_n' in self.params:
-            N = self.params['loop_n'] * action_config['loop_size']
-            shared_config_added_data['N'] = N
+        if action_config['chain_idxs'] is None:
+            if 'loop_n' in self.params:
+                N = self.params['loop_n'] * action_config['loop_size']
+                shared_config_added_data['N'] = N
+            else:
+                N = shared_config['N']
+            chains = [(0, N, False)]
+            
         else:
-            N = shared_config['N']
+            if 'chains' not in shared_config:
+                raise ValueError('Chains are not configured!')
+            if hasattr(action_config['chain_idxs'], '__iter__'):
+                chains = [shared_config['chains'][i] for i in action_config['chain_idxs']]
+            else:
+                chains = [shared_config['chains'][int(action_config['chain_idxs'])]]
                
-        # TODO: move to share
-        loops = looplib.random_loop_arrays.exponential_loop_array(
-                N, 
-                action_config['loop_size'],
-                action_config['loop_spacing']
-        )
+        loops = []
+        for start, end, is_ring in chains:
+            chain_len = end-start
+            loops.append(
+                looplib.random_loop_arrays.exponential_loop_array(
+                    chain_len, 
+                    action_config['loop_size'],
+                    action_config['loop_spacing']
+            ))
+            loops[0] += start
+        loops = np.vstack(loops)
 
         shared_config_added_data['loops'] = (
             loops 
