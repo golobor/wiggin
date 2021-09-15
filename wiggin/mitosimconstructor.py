@@ -673,7 +673,7 @@ class GenerateLoopBrushInitialConformation(SimAction):
         elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_step'] is not None):
             helix_step = action_config['helix_step']
             helix_turn_length = helix_step * action_config['axial_compression_factor']
-            helix_radius_squared = ( (action_config['helix_turn_length']) ** 2 
+            helix_radius_squared = ( (helix_turn_length) ** 2 
                                       - 
                                       (helix_step) ** 2 
                                     ) / np.pi / np.pi / 2.0 / 2.0
