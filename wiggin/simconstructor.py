@@ -278,6 +278,8 @@ class BlockStep(SimAction):
             return False
 
 
+
+
 class LocalEnergyMinimization(SimAction):
     def __init__(
         self,
@@ -567,6 +569,8 @@ class AddGlobalVariableDynamics(SimAction):
                     (self_conf['final_value'] - cur_val) 
                     / (self_conf['final_block'] - sim.block + 1)
                     )
+
+            logging.info(f'set {self_conf["variable_name"]} to {new_val}')
             sim.context.setParameter(self_conf['variable_name'], new_val)
 
 
