@@ -3,11 +3,15 @@ import copy
 import os
 import logging
 import inspect
+import numbers
 
+import bisect
+
+import numpy as np
 
 # import numpy as np
 
-from polychrom import simulation, forces, forcekits, hdf5_format
+from polychrom import simulation, forces, forcekits, hdf5_format, starting_conformations
 from . import extra_forces
 
 
