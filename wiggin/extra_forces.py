@@ -111,7 +111,6 @@ def homotypic_quartic_repulsive_attractive(
     repulsionRadius=1.0,
     attractionEnergy=3.0,
     attractionRadius=1.5,
-    selectiveRepulsionEnergy=20.0,
     selectiveAttractionEnergy=1.0,
     name="homotypic_quartic_repulsive_attractive",
 ):
@@ -145,15 +144,14 @@ def homotypic_quartic_repulsive_attractive(
     energy = (
         "step(REPsigma - r) * Erep + step(r - REPsigma) * Eattr;"
         ""
-        "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPeTot;"
-        "REPeTot = REPe + delta(type1-type2) * (1-delta(type1)) * REPeAdd;"
+        "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPe;"
         "rnorm2 = rnorm*rnorm;"
         "rnorm = r/REPsigma;"
         ""
         "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTReTot;"
-        "ATTReTot = ATTRe + delta(type1-type2) * (1-delta(type1)) * ATTReAdd;"
+        "ATTReTot = ATTRe + delta(type1-type2) * (1-delta(type1)) * (1-delta(type2)) * ATTReAdd;"
         "rnorm_shift2 = rnorm_shift*rnorm_shift;"
-        "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta;"
+        "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta"
     )
 
     force = openmm.CustomNonbondedForce(energy)
@@ -161,7 +159,6 @@ def homotypic_quartic_repulsive_attractive(
 
     force.addGlobalParameter("REPe", repulsionEnergy * sim_object.kT)
     force.addGlobalParameter("REPsigma", repulsionRadius * sim_object.conlen)
-    force.addGlobalParameter("REPeAdd", selectiveRepulsionEnergy * sim_object.kT)
 
     force.addGlobalParameter("ATTRe", attractionEnergy * sim_object.kT)
     force.addGlobalParameter(
