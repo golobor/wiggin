@@ -198,7 +198,7 @@ class InitializeSimulation(SimAction):
             timestep=1.0,
             max_Ek=1000,
             PBCbox=False,
-            reporter_block_size=50,
+            reporter_block_size=10,
             reporter_blocks_only=False,
             ):
         params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
@@ -242,6 +242,7 @@ class InitializeSimulation(SimAction):
             GPU=self_conf['GPU'],
             integrator=self_conf['integrator'],
             error_tol=self_conf['error_tol'],
+            timestep=self_conf['timestep'],
             collision_rate=self_conf['collision_rate'],
             mass=self_conf['mass'],
             PBCbox=self_conf['PBCbox'],
