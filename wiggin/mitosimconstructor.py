@@ -286,6 +286,7 @@ class AddBackboneTethering(SimAction):
                 name='tether_backbone'
             )
         )
+        
 
 class AddTipsTethering(SimAction):
     def __init__(
@@ -333,9 +334,25 @@ class AddInitConfCylindricalConfinement(SimAction):
 
         coords = shared_config['initial_conformation']
 
+        if ((action_config['z_min'] is None) != (action_config['z_max'] is None)):
+            raise ValueError('Both z_min and z_max have to be either specified or left as None.')
+        coords = shared_config['initial_conformation']
+        if (action_config['z_min'] is None):
+            action_config['z_min'] = coords[:,2].min()
+        elif (action_config['z_min'] == 'bb'):
+            action_config['z_min'] = coords[shared_config['backbone']][:,2].min()
+        else:
+            action_config['z_min'] = action_config['z_min']
+            
+            
+        if (action_config['z_max'] is None):
+            action_config['z_max'] = coords[:,2].max()
+        elif (action_config['z_max'] == 'bb'):
+            action_config['z_max'] = coords[shared_config['backbone']][:,2] .max()
+        else:
+            action_config['z_max'] = action_config['z_max']
+
         action_config['r_max'] = ((coords[:,:2]**2).sum(axis=1)**0.5).max()
-        action_config['z_min'] = coords[:,2].min()
-        action_config['z_max'] = coords[:,2].max()
 
         return shared_config_added_data, action_config
 
@@ -345,7 +362,7 @@ class AddInitConfCylindricalConfinement(SimAction):
         self_conf = action_configs[self.name]
 
         sim.add_force(
-            forces.cylindrical_confinement(
+            extra_forces.cylindrical_confinement_2(
                 sim_object=sim,
                 r=self_conf['r_max'],
                 top=self_conf['z_max'],
