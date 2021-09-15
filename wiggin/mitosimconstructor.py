@@ -2,14 +2,18 @@ import os
 import sys
 import shelve
 import logging
+import numbers
 
 import numpy as np
 
-from polychrom import forces
+import looplib
+import looplib.looptools
+
+from polychrom import forces, forcekits
 
 from .simconstructor import SimAction
 
-from . import starting_mitotic_conformations
+from . import starting_mitotic_conformations, extra_forces
 
 logging.basicConfig(level=logging.INFO)
 
@@ -798,7 +802,7 @@ class SaveConfiguration(SimAction):
             raise ValueError(f'Unknown mode for saving configuration: {action_config["mode_exists"]}')
         if os.path.exists(shared_config['folder']):
             if action_config['mode_exists'] == 'fail':
-                raise OSError(f'The output folder already exists {shared_config["folder"]}!')
+                raise OSError(f'The output folder already exists {shared_config["folder"]}')
             elif action_config['mode_exists'] == 'exit':
                 sys.exit(0)
 
