@@ -700,6 +700,71 @@ class GenerateLoopBrushInitialConformation(SimAction):
         return shared_config_added_data, action_config
 
 
+class GenerateLoopBrushUniformHelixInitialConformation(SimAction):
+    def __init__(
+        self,
+        helix_radius=None,
+        helix_step=None,
+        axial_compression_factor=None,
+        period_particles=None,
+        loop_fold='RW',
+        loop_layer='all',
+        chain_bond_length=1.0,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+    
+        n_params = sum([
+            i is not None 
+            for i in [action_config['helix_radius'], 
+                      action_config['helix_step'], 
+                      action_config['axial_compression_factor']]])
+        
+        if n_params not in [0, 2]:
+            raise ValueError('Please specify 0 or 2 out of these four parameters: '
+                             'radius, step and axis-to-backbone ratio')
+                
+        if (action_config['helix_radius'] is not None) and (action_config['helix_step'] is not None):
+            helix_radius = action_config['helix_radius']
+            helix_step = action_config['helix_step']
+        elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_radius'] is not None):
+            helix_radius = action_config['helix_radius']
+            helix_step = 2 * np.pi * helix_radius / np.sqrt(action_config['axial_compression_factor'] ** 2 - 1)
+            
+        elif (action_config['axial_compression_factor'] is not None) and (action_config['helix_step'] is not None):
+            helix_step = action_config['helix_step']
+            helix_turn_length = helix_step * action_config['axial_compression_factor']
+            helix_radius_squared = ( 
+                helix_turn_length ** 2 - helix_step ** 2 
+                ) / np.pi / np.pi / 2.0 / 2.0
+            helix_radius = helix_radius_squared ** 0.5
+        else:
+            helix_radius = 0
+            helix_step = int(1e9)
+
+        action_config['helix_step'] = helix_step
+        action_config['helix_radius'] = helix_radius
+
+        shared_config_added_data['initial_conformation'] = (
+            starting_mitotic_conformations.make_uniform_helical_loopbrush(
+                L=shared_config['N'],
+                helix_radius=helix_radius,
+                helix_step=helix_step,
+                period_particles=action_config['period_particles'],
+                loops=shared_config['loops'],
+                chain_bond_length=action_config['chain_bond_length'],
+                loop_fold=action_config['loop_fold'],
+            )
+        )
+
+        return shared_config_added_data, action_config
+
+
 class SaveConfiguration(SimAction):
     def __init__(
         self,
