@@ -126,12 +126,6 @@ class SimConstructor:
         name = []
         for action_name, params in self.action_params.items():
             default_params = self._default_action_params.get(action_name, {})
-            print('!!!')
-            print(default_params)
-            print('!!!')
-            print(params)
-            print('!!!')
-            print('!!!')
             for k, v in params.items():
                 if k in default_params and v != default_params[k]:
                     name += ['_', k, '-', str(v)]
@@ -255,7 +249,6 @@ class InitializeSimulation(SimAction):
 
 
 class BlockStep(SimAction):
-    
     def __init__(
         self,
         num_blocks = 100,
