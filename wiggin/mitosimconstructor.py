@@ -205,6 +205,37 @@ class AddLoops(SimAction):
 
 
 
+class AddRootLoopSeparator(SimAction):
+    def __init__(
+        self,
+        wiggle_dist=0.1,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        loops = shared_config['loops']
+        root_loops = loops[looplib.looptools.get_roots(loops)]
+        root_loop_spacers = np.vstack([root_loops[:-1][:,1], root_loops[1:][:,0]]).T
+        root_loop_spacer_lens = root_loop_spacers[:,1] - root_loop_spacers[:,0]
+
+        sim.add_force(
+            forces.harmonic_bonds(
+                sim_object=sim,
+                bonds=root_loop_spacers,
+                bondWiggleDistance=self_conf['wiggle_dist'],
+                bondLength=root_loop_spacer_lens,
+                name='RootLoopSpacers',
+                override_checks=True
+            )
+        )
+
+
 class AddBackboneStiffness(SimAction):
     def __init__(
         self,
