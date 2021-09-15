@@ -879,3 +879,81 @@ class AddChainsSelectiveRepAttr(SimAction):
         )
 
 
+class AddChainsHeteropolymerRepAttr(SimAction):
+    def __init__(
+        self,
+        chains = ((0, None, 0),),
+        bond_length = 1.0,
+        wiggle_dist = 0.025,
+        stiffness_k = None,
+        repulsion_e = 2.5, ## TODO: implement np.inf 
+        attraction_e = None,
+        attraction_r = None,
+        particle_types = None,
+        except_bonds = False,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        params['chains'] = np.array(chains, dtype=np.object)
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        if hasattr(action_config['chains'], '__iter__') and hasattr(action_config['chains'][0], '__iter__'):
+            shared_config_added_data['chains'] = action_config['chains']
+        elif hasattr(action_config['chains'], '__iter__') and isinstance(action_config['chains'][0], numbers.Number):
+            edges = np.r_[0, np.cumsum(action_config['chains'])]
+            chains = np.array(
+                [(st, end, False) for st, end in zip(edges[:-1], edges[1:])],
+                dtype=np.object)
+            action_config['chains'] = chains
+            shared_config_added_data['chains'] = chains
+            
+        return shared_config_added_data, action_config
+
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        nonbonded_force_func = extra_forces.heteropolymer_quartic_repulsive_attractive
+        nonbonded_force_kwargs = dict(
+                        repulsionEnergy=self_conf['repulsion_e'],
+                        repulsionRadius=1.0,
+                        attractionEnergies=self_conf['attraction_e'],
+                        attractionRadius=self_conf['attraction_r'],
+                        particleTypes=(
+                            shared_config['particle_types']
+                            if self_conf['particle_types'] is None 
+                            else self_conf['particle_types']
+                        )
+        )
+    
+        sim.add_force(
+            forcekits.polymer_chains(
+                sim,
+                chains=shared_config['chains'],
+                bond_force_func=forces.harmonic_bonds,
+                bond_force_kwargs={
+                    'bondLength': self_conf['bond_length'],
+                    'bondWiggleDistance': self_conf['wiggle_dist'],
+                },
+
+                angle_force_func=(
+                    None if self_conf['stiffness_k'] is None 
+                    else forces.angle_force),
+                angle_force_kwargs={
+                    'k': self_conf['stiffness_k'] 
+                },
+
+                nonbonded_force_func=nonbonded_force_func,
+                nonbonded_force_kwargs=nonbonded_force_kwargs,
+
+                except_bonds=self_conf['except_bonds']
+            )
+        )
+
+
