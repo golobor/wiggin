@@ -1,4 +1,4 @@
-import os
+# import os
 # import numpy as np
 
 import wiggin.simconstructor as smc
@@ -21,7 +21,8 @@ c.add_action(
 )
 
 c.add_action(
-    msmc.GenerateLoopBrushInitialConformation(helix_radius=1e-9, helix_step=1e9),
+    msmc.GenerateLoopBrushInitialConformation(
+        helix_radius=1e-9, helix_step=1e9),
 )
 
 c.add_action(
@@ -68,7 +69,7 @@ c.add_action(
     ),
 )
 
-c.auto_name(root_data_folder = './example_sims/bottle_brush_cylinder/')
+c.auto_name(root_data_folder='./data/bottlebrush_cylinder/')
 
 c.add_action(
     msmc.SaveConfiguration()

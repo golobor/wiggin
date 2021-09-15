@@ -111,7 +111,6 @@ def homotypic_quartic_repulsive_attractive(
     repulsionRadius=1.0,
     attractionEnergy=3.0,
     attractionRadius=1.5,
-    selectiveRepulsionEnergy=20.0,
     selectiveAttractionEnergy=1.0,
     name="homotypic_quartic_repulsive_attractive",
 ):
@@ -145,15 +144,14 @@ def homotypic_quartic_repulsive_attractive(
     energy = (
         "step(REPsigma - r) * Erep + step(r - REPsigma) * Eattr;"
         ""
-        "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPeTot;"
-        "REPeTot = REPe + delta(type1-type2) * (1-delta(type1)) * REPeAdd;"
+        "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPe;"
         "rnorm2 = rnorm*rnorm;"
         "rnorm = r/REPsigma;"
         ""
         "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTReTot;"
-        "ATTReTot = ATTRe + delta(type1-type2) * (1-delta(type1)) * ATTReAdd;"
+        "ATTReTot = ATTRe + delta(type1-type2) * (1-delta(type1)) * (1-delta(type2)) * ATTReAdd;"
         "rnorm_shift2 = rnorm_shift*rnorm_shift;"
-        "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta;"
+        "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta"
     )
 
     force = openmm.CustomNonbondedForce(energy)
@@ -161,7 +159,6 @@ def homotypic_quartic_repulsive_attractive(
 
     force.addGlobalParameter("REPe", repulsionEnergy * sim_object.kT)
     force.addGlobalParameter("REPsigma", repulsionRadius * sim_object.conlen)
-    force.addGlobalParameter("REPeAdd", selectiveRepulsionEnergy * sim_object.kT)
 
     force.addGlobalParameter("ATTRe", attractionEnergy * sim_object.kT)
     force.addGlobalParameter(
@@ -310,3 +307,183 @@ def linear_tether_particles(
             print("particle %d tethered! " % i)
     
     return force
+
+
+
+def heteropolymer_quartic_repulsive_attractive(
+    sim_object,
+    particleTypes,
+    attractionEnergies,
+    repulsionEnergy=3.0,  # base repulsion energy for **all** particles
+    repulsionRadius=1.0,
+    attractionRadius=1.5,
+    keepVanishingInteractions=False,
+    name="heteropolymer_quartic_repulsive_attractive",
+):
+    """
+    A version of smooth square well potential that enables the simulation of
+    heteropolymers. Every monomer is assigned a number determining its type,
+    then one can specify additional attraction between the types with the
+    interactionMatrix. Repulsion between all monomers is the same, except for 
+    extraHardParticles, which, if specified, have higher repulsion energy. 
+    
+    The overall potential is the same as in :py:func:`polychrom.forces.smooth_square_well`
+    
+    Treatment of extraHard particles is the same as in :py:func:`polychrom.forces.selective_SSW`
+
+    This is an extension of SSW (smooth square well) force in which:
+    
+    a) You can give monomerTypes (e.g. 0, 1, 2 for A, B, C)
+       and interaction strengths between these types. The corresponding entry in
+       interactionMatrix is multiplied by selectiveAttractionEnergy to give the actual
+       **additional** depth of the potential well.        
+    b) You can select a subset of particles and make them "extra hard". See selective_SSW force for descrition. 
+    
+    Force summary
+    *************
+    
+    Potential is the same as smooth square well, with the following parameters for particles i and j: 
+    
+    * Attraction energy (i,j) = attractionEnergy + selectiveAttractionEnergy * interactionMatrix[i,j] 
+
+    * Repulsion Energy (i,j) = repulsionEnergy + selectiveRepulsionEnergy;  if (i) or (j) are extraHard
+    * Repulsion Energy (i,j) = repulsionEnergy;  otherwise 
+
+    Parameters
+    ----------
+
+    interactionMatrix: np.array
+        the **EXTRA** interaction strenghts between the different types.
+        Only upper triangular values are used. See "Force summary" above 
+    monomerTypes: list of int or np.array
+        the type of each monomer, starting at 0
+    extraHardParticlesIdxs : list of int
+        the list of indices of the "extra hard" particles. The extra hard
+        particles repel all other particles with extra
+        `selectiveRepulsionEnergy`
+    repulsionEnergy: float
+        the heigth of the repulsive part of the potential.
+        E(0) = `repulsionEnergy`
+    repulsionRadius: float
+        the radius of the repulsive part of the potential.
+        E(`repulsionRadius`) = 0,
+        E'(`repulsionRadius`) = 0
+    attractionEnergy: float
+        the depth of the attractive part of the potential.
+        E(`repulsionRadius`/2 + `attractionRadius`/2) = `attractionEnergy`
+    attractionRadius: float
+        the maximal range of the attractive part of the potential.
+    selectiveRepulsionEnergy: float
+        the **EXTRA** repulsion energy applied to the "extra hard" particles
+    selectiveAttractionEnergy: float
+        the **EXTRA** attraction energy (prefactor for the interactionMatrix interactions)
+    keepVanishingInteractions : bool
+        a flag that determines whether the terms that have zero interaction are
+        still added to the force. This can be useful when changing the force
+        dynamically (i.e. switching interactions on at some point)
+    """
+
+    if not attractionEnergies:
+        raise ValueError('Please provide interaction energies as a list of (i,j, energy)!')
+    
+    n_interactions = len(set((i,j) for i,j,e in attractionEnergies))
+    n_interactions_simplified = len(set((min(i,j), max(i,j)) for i,j,e in attractionEnergies)) 
+    if (n_interactions != n_interactions_simplified):
+        raise ValueError('Each pairwise interaction should be specified only once!')
+    
+    attractionEnergiesSym = (
+        list(attractionEnergies) 
+        + [(j,i,e) for (i,j,e) in attractionEnergies if i != j]
+    )
+
+    # Check type info for consistency
+    energy = (
+        "step(REPsigma - r) * Erep + step(r - REPsigma) * Eattr;"
+        ""
+        "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPe;"
+        "rnorm2 = rnorm*rnorm;"
+        "rnorm = r/REPsigma;"
+        ""
+        "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTReTot * kT;"   
+    )
+    
+    energy += (
+        'ATTReTot = (' 
+        +' + '.join(
+            [f"delta(type1-{i})*delta(type2-{j})*INT_{i}_{j}"
+             for i, j, e in attractionEnergiesSym])
+        + ");" 
+    )
+
+    energy += (
+        "rnorm_shift2 = rnorm_shift*rnorm_shift;"
+        "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta"
+    )
+
+
+    force = openmm.CustomNonbondedForce(energy)
+    force.name = name
+
+    force.setCutoffDistance(attractionRadius * sim_object.conlen)
+
+    force.addGlobalParameter("REPe", repulsionEnergy * sim_object.kT)
+    force.addGlobalParameter("REPsigma", repulsionRadius * sim_object.conlen)
+
+    force.addGlobalParameter("kT", sim_object.kT)
+    force.addGlobalParameter(
+        "ATTRdelta", sim_object.conlen * (attractionRadius - repulsionRadius) / 2.0
+    )
+
+    for i, j, e in attractionEnergiesSym:
+        force.addGlobalParameter(f"INT_{i}_{j}", e)
+
+    force.addPerParticleParameter("type")
+
+    for i in range(sim_object.N):
+        force.addParticle((float(particleTypes[i]),))
+
+    return force
+
+
+
+
+def cylindrical_confinement_2(
+    sim_object, 
+    r,  
+    k=1.0,
+    transition_width=3, 
+    top=None,
+    bottom=None,
+    name="cylindrical_confinement"
+):
+
+    if (bottom is not None and top is not None):
+        force = openmm.CustomExternalForce(
+            "kT * k * ("
+            "   step(dr)  * dr  * dr * dr  / (dr * dr + t*t)"
+            " + step(dZb) * dZb * dZb * dZb / (dZb * dZb + t*t)"
+            " + step(dZt) * dZt * dZt * dZt / (dZt * dZt + t*t)"
+            ");"
+            "dr = sqrt(x^2 + y^2) - r;"
+            "dZt = z - top;"
+            "dZb = bottom - z;"
+        )
+        force.addGlobalParameter("top", top * sim_object.conlen)
+        force.addGlobalParameter("bottom", bottom * sim_object.conlen)
+    else:
+        force = openmm.CustomExternalForce(
+            "kT * k * step(dr) * dr * dr * dr/(dr*dt+t*t);"
+            "dr = sqrt(x^2 + y^2) - r"
+        )
+    force.name = name
+
+    for i in range(sim_object.N):
+        force.addParticle(i, [])
+
+    force.addGlobalParameter("k", k /  sim_object.conlen)
+    force.addGlobalParameter("kT", sim_object.kT)
+    force.addGlobalParameter("r", r * sim_object.conlen)
+    force.addGlobalParameter("t", transition_width * sim_object.conlen)
+    
+    return force
+

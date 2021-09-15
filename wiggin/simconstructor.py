@@ -3,11 +3,15 @@ import copy
 import os
 import logging
 import inspect
+import numbers
 
+import bisect
+
+import numpy as np
 
 # import numpy as np
 
-from polychrom import simulation, forces, forcekits, hdf5_format
+from polychrom import simulation, forces, forcekits, hdf5_format, starting_conformations
 from . import extra_forces
 
 
@@ -115,7 +119,7 @@ class SimConstructor:
                     elif issubclass(type(new_sim), simulation.Simulation):
                         self._sim = new_sim
                     elif new_sim is False:
-                        break
+                        return
                     else:
                         raise ValueError(f'{action.name}.run_loop() returned {new_sim}. '
                                         'Allowed values are: polychrom.simulation.Simulation, None or False')
@@ -126,12 +130,6 @@ class SimConstructor:
         name = []
         for action_name, params in self.action_params.items():
             default_params = self._default_action_params.get(action_name, {})
-            print('!!!')
-            print(default_params)
-            print('!!!')
-            print(params)
-            print('!!!')
-            print('!!!')
             for k, v in params.items():
                 if k in default_params and v != default_params[k]:
                     name += ['_', k, '-', str(v)]
@@ -198,7 +196,7 @@ class InitializeSimulation(SimAction):
             timestep=1.0,
             max_Ek=1000,
             PBCbox=False,
-            reporter_block_size=50,
+            reporter_block_size=10,
             reporter_blocks_only=False,
             ):
         params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
@@ -242,6 +240,7 @@ class InitializeSimulation(SimAction):
             GPU=self_conf['GPU'],
             integrator=self_conf['integrator'],
             error_tol=self_conf['error_tol'],
+            timestep=self_conf['timestep'],
             collision_rate=self_conf['collision_rate'],
             mass=self_conf['mass'],
             PBCbox=self_conf['PBCbox'],
@@ -254,7 +253,6 @@ class InitializeSimulation(SimAction):
 
 
 class BlockStep(SimAction):
-    
     def __init__(
         self,
         num_blocks = 100,
@@ -275,6 +273,8 @@ class BlockStep(SimAction):
             return sim
         else:
             return False
+
+
 
 
 class LocalEnergyMinimization(SimAction):
@@ -308,10 +308,27 @@ class AddChains(SimAction):
         wiggle_dist = 0.025,
         stiffness_k = None,
         repulsion_e = 2.5, ## TODO: implement np.inf 
+        attraction_e = None,
+        attraction_r = None,
         except_bonds = False,
     ):
         params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
         super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        if hasattr(action_config['chains'], '__iter__') and hasattr(action_config['chains'][0], '__iter__'):
+            shared_config_added_data['chains'] = action_config['chains']
+        elif hasattr(action_config['chains'], '__iter__') and isinstance(action_config['chains'][0], numbers.Number):
+            edges = np.r_[0, np.cumsum(action_config['chains'])]
+            chains = [(st, end, False) for st, end in zip(edges[:-1], edges[1:])]
+            action_config['chains'] = chains
+            shared_config_added_data['chains'] = chains
+            
+        return shared_config_added_data, action_config
 
 
     def run_init(self, shared_config, action_configs, sim):
@@ -319,10 +336,28 @@ class AddChains(SimAction):
         # only use parameters from action_configs[self.name] and shared_config
         self_conf = action_configs[self.name]
 
+        nonbonded_force_func = None
+        nonbonded_force_kwargs = {}
+        if self_conf['repulsion_e']:
+            if self_conf['attraction_e'] and self_conf['attraction_r']:
+                nonbonded_force_func = extra_forces.quartic_repulsive_attractive
+                nonbonded_force_kwargs = dict(
+                    repulsionEnergy=self_conf['repulsion_e'],
+                    repulsionRadius=1.0,
+                    attractionEnergy=self_conf['attraction_e'],
+                    attractionRadius=self_conf['attraction_r'],
+                )
+
+            else:
+                nonbonded_force_func = extra_forces.quartic_repulsive
+                nonbonded_force_kwargs = {
+                    'trunc': self_conf['repulsion_e'] 
+                }
+
         sim.add_force(
             forcekits.polymer_chains(
                 sim,
-                chains=self_conf['chains'],
+                chains=shared_config['chains'],
                 bond_force_func=forces.harmonic_bonds,
                 bond_force_kwargs={
                     'bondLength': self_conf['bond_length'],
@@ -336,12 +371,8 @@ class AddChains(SimAction):
                     'k': self_conf['stiffness_k'] 
                 },
 
-                nonbonded_force_func=(
-                    None if self_conf['repulsion_e'] is None 
-                    else extra_forces.quartic_repulsive),
-                nonbonded_force_kwargs={
-                    'trunc': self_conf['repulsion_e'] 
-                },
+                nonbonded_force_func=nonbonded_force_func,
+                nonbonded_force_kwargs=nonbonded_force_kwargs,
 
                 except_bonds=self_conf['except_bonds']
             )
@@ -396,6 +427,25 @@ class CrosslinkParallelChains(SimAction):
                 name='ParallelChainsCrosslinkBonds'
             )
         )
+
+
+class GenerateRWInitialConformation(SimAction):
+    def __init__(
+        self
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        shared_config_added_data['initial_conformation'] = (
+            starting_conformations.create_random_walk(step_size=1.0, N=shared_config['N'])
+        )
+
+        return shared_config_added_data, action_config
 
 
 class SetInitialConformation(SimAction):
@@ -516,7 +566,55 @@ class AddGlobalVariableDynamics(SimAction):
                     (self_conf['final_value'] - cur_val) 
                     / (self_conf['final_block'] - sim.block + 1)
                     )
+
+            logging.info(f'set {self_conf["variable_name"]} to {new_val}')
             sim.context.setParameter(self_conf['variable_name'], new_val)
+
+
+
+class AddDynamicParameterUpdate(SimAction):
+    def __init__(
+        self,
+        force,
+        param,
+        ts = [90, 100],
+        vals = [0, 1.0], 
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+        return shared_config_added_data, action_config
+
+
+    def run_loop(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        t = sim.block
+        ts = self_conf['ts']
+        vals = self_conf['vals']
+
+        if ts[0] <= t <= ts[-1]:
+            
+            step = bisect.bisect_left(ts, t) - 1
+            if step == -1:
+                step = 0
+            
+            
+            param_full_name = f'{self_conf["force"]}_{self_conf["param"]}'
+            cur_val = sim.context.getParameter(param_full_name) 
+            new_val = np.interp(t, ts[step:step+2], vals[step:step+2])
+            
+            if cur_val != new_val:
+                 
+                logging.info(f'set {param_full_name} to {new_val}')
+                sim.context.setParameter(param_full_name, new_val)
+
 
 
 # class SaveConformationTxt(SimAction):

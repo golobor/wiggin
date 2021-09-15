@@ -1,6 +1,8 @@
 import looplib.looptools
 import numpy as np
 
+import polychrom
+import polychrom.starting_conformations
 
 def norm(vector):
     return np.sqrt(np.dot(vector, vector))
@@ -186,15 +188,7 @@ def biased_RW(L, step, avg_len):
     return xs                                               
 
 
-def brownian_bridge(N, step, final_len):                            
-    if N * step < final_len:
-        raise Exception("Not possible, madam/sir!")               
-    
-    xs = [0]
-    for i in range(1,N):
-        bias = ( 1.0 - (final_len - xs[-1]) /step/ (N-i)) / 2.0
-        xs.append(xs[-1] + (-step if np.random.random()<bias else step))
-    return np.array(xs)
+
 
 
 def make_helical_loopbrush(
@@ -385,3 +379,218 @@ def make_helical_loopbrush_2(
     return coords
 
 
+def make_uniform_helical_loopbrush(
+        L,
+        helix_radius,
+        helix_step,
+        period_particles,
+        loops,
+        chain_bond_length=1.0,
+        loop_fold='RW',  # possible values: RW, pin_radial, pin_random
+        ):
+    '''
+    Generate a conformation of a loop brush with a helically folded backbone.
+    In this conformation, loops are folded in half and project radially
+    from the backbone. 
+    
+    Parameters
+    ----------
+    L : int
+        Number of particles.
+    helix_radius: float
+        Radius of the helical backbone.
+    helix_step: float
+        Axial step of the helical backbone.
+    loops: a list of tuples [(int, int)]
+        Particle indices of (start, end) of each loop.
+    loop_fold: str
+        If "RW", fold loops into random walks.
+        If "pin_radial", loops are pin-folded and 
+        aligned radially away from the center of the helix.
+        If 'pin_random', loops are pin-folded and aligned at random angles
+        within the xy plane.
+        If 'pin_periodic_XX', loops are pin folded and aligned
+        radially, with a period of XX loops.
+        
+
+    Returns 
+    -------
+    coords: np.ndarray
+        An Lx3 array of particle coordinates.
+    
+    '''
+
+    if loop_fold.startswith('pin_periodic'):
+        loop_pin_period = float(loop_fold.split('_')[2])
+        loop_fold = 'pin_periodic'
+
+    LOOP_FOLDS = ['RW', 'pin_radial', 'pin_random', 'pin_periodic']
+    if not (loop_fold  in LOOP_FOLDS):
+        raise ValueError(f'Unknown fold type {loop_fold}. Enabled fold types: {LOOP_FOLDS}')
+
+    coords = np.zeros(shape=(L,3))
+    loops = np.asarray(loops)
+    loops = loops[np.abs(loops[:,1]-loops[:,0])>0]
+    root_loops = loops[looplib.looptools.get_roots(loops)]
+    
+    loopstarts = np.array([min(i) for i in root_loops])
+    loopends = np.array([max(i) for i in root_loops])
+    gapstarts = np.r_[0, loopends[:-1]]
+    gapends = loopstarts
+    looplens = loopends - loopstarts
+    gaplens = gapends - gapstarts 
+    avg_looplen = np.mean(looplens)
+    avg_gaplooplen = np.mean(looplens + gaplens)
+
+    period_loops = period_particles / avg_gaplooplen
+    loop_angle_step = 2 * np.pi / period_loops
+    loop_z_step = helix_step / period_loops
+    
+    last_angle = 0
+    last_z = 0
+    
+    for i, (gap_start, loopstart, loopend) in enumerate(
+            zip(np.r_[0, loopends], np.r_[loopstarts, L-1], np.r_[loopends,L-1])):
+        
+        gaplooplen = loopend - gap_start
+        gap_end = loopstart
+
+        bb_particles_per_loop = gap_end-gap_start+2
+
+        scaled_loop_angle_step = loop_angle_step * max(1, gaplooplen) / avg_gaplooplen
+        scaled_loop_z_step = loop_z_step * max(1, gaplooplen) / avg_gaplooplen
+        
+        bb_angles = last_angle + np.linspace(0, 1, bb_particles_per_loop) * scaled_loop_angle_step
+        bb_zs = last_z + np.linspace(0, 1, bb_particles_per_loop) * scaled_loop_z_step
+        bb_particle_idxs = np.r_[np.arange(gap_start, gap_end+1), loopend]
+
+        coords[bb_particle_idxs, 0] = np.cos(bb_angles) * helix_radius
+        coords[bb_particle_idxs, 1] = np.sin(bb_angles) * helix_radius
+        coords[bb_particle_idxs, 2] = bb_zs
+        
+        last_angle += scaled_loop_angle_step
+        last_z += scaled_loop_z_step
+        
+    if loop_fold =='RW':
+        for i in range(len(root_loops)):
+            coords[loopstarts[i] : loopends[i]+1] = brownian_bridge(
+                N=looplens[i]+1,
+                ndim=3,
+                start=coords[loopstarts[i]],
+                end=coords[loopends[i]],
+                step_size=chain_bond_length
+            )
+
+    elif loop_fold in ['pin_radial', 'pin_random', 'pin_periodic']:
+        for i in range(len(root_loops)):
+            loopstart = root_loops[i][0]
+            loopend = root_loops[i][1]
+            bb_u = coords[loopend] - coords[loopstart]
+            loop_base_length = np.linalg.norm(bb_u)
+            if loop_fold == 'pin_random':
+                u = np.cross(bb_u, bb_u+(np.random.random(3)*0.2-0.1))
+                u[2] = 0
+            elif loop_fold == 'pin_radial':
+                u = (coords[root_loops[i][0]] + coords[root_loops[i][1]])/2
+                u[2] = 0
+            elif loop_fold == 'pin_periodic':
+                u = [np.sin(2*np.pi*i/loop_pin_period), np.cos(2*np.pi*i/loop_pin_period), 0]
+            
+            u /= np.linalg.norm(u)
+            
+            loop_full_contour_len = looplens[i] * chain_bond_length
+            if loop_full_contour_len > loop_base_length:
+                pin_length = 0.5 * np.sqrt(
+                    (loop_full_contour_len) ** 2 - (loop_base_length) ** 2
+                ) 
+                u1 = (u * pin_length + bb_u * 0.5 * loop_base_length)
+                u2 = (u * pin_length - bb_u * 0.5 * loop_base_length) 
+                u1 *= chain_bond_length / np.linalg.norm(u1)
+                u2 *= chain_bond_length / np.linalg.norm(u2)
+            else:
+                
+                u1 = bb_u
+                u2 = - bb_u 
+                u1 *= chain_bond_length / np.linalg.norm(u1)
+                u2 *= chain_bond_length / np.linalg.norm(u2)
+
+            for j in range(looplens[i] // 2):
+                coords[loopstarts[i]+j+1] = coords[loopstarts[i]+j] + u1
+                coords[loopends[i]-j-1]   = coords[loopends[i]-j]   + u2
+
+    return coords
+
+
+def brownian_bridge_2(N, step, final_len):                            
+    if N * step < final_len:
+        raise Exception("Not possible, madam/sir!")               
+    
+    xs = [0]
+    for i in range(1,N):
+        bias = ( 1.0 - (final_len - xs[-1]) /step/ (N-i)) / 2.0
+        xs.append(xs[-1] + (-step if np.random.random()<bias else step))
+    return np.array(xs)
+
+
+def brownian_bridge(N, ndim=1, step_size=1.0, start = 0, end=0):
+    d = np.zeros((N, ndim), dtype=np.float32)
+    d[0,:] = 0
+    d[-1,:] = 0
+    
+    steps = np.random.randn(N-2, ndim)
+    for n in range(N - 2):
+        d[n + 1, :] = d[n, :]  * (N - n - 2) / (N - 1 - n) + steps[n]
+    
+    d += np.array(start)[None,:] * (1-np.arange(N)/(N-1))[:,None] 
+    d += np.array(end)[None,:] * (np.arange(N) / (N-1))[:,None] 
+
+    return d
+
+
+def make_random_loopbrush(
+        L,
+        loops):
+    '''
+    Generate a conformation of a loop brush with a helically folded backbone.
+    In this conformation, loops are folded in half and project radially
+    from the backbone. 
+    
+    Parameters
+    ----------
+    L : int
+        Number of particles.
+    loops: a list of tuples [(int, int)]
+        Particle indices of (start, end) of each loop.
+    Returns 
+    -------
+    coords: np.ndarray
+        An Lx3 array of particle coordinates.
+    
+    '''
+    coords = np.zeros(shape=(L,3))
+    root_loops = loops[looplib.looptools.get_roots(loops)]
+    loopstarts = np.array([min(i) for i in root_loops])
+    loopends = np.array([max(i) for i in root_loops])
+    looplens = loopends - loopstarts
+
+    if len(root_loops)>0:
+        bbidxs = np.concatenate(
+            [np.arange(0,loopstarts[0]+1)]
+            + [np.arange(loopends[i],loopstarts[i+1]+1)
+               for i in range(len(root_loops)-1)]
+            + [np.arange(loopends[-1], L)])
+    else:
+        bbidxs = range(L)
+    bb_len = len(bbidxs)
+
+    coords[bbidxs] = polychrom.starting_conformations.create_random_walk(1.0, bb_len)
+    
+    for i in range(len(root_loops)):
+        coords[loopstarts[i] : loopends[i]+1] = brownian_bridge(
+            N=looplens[i]+1,
+            ndim=3,
+            start=coords[loopstarts[i]],
+            end=coords[loopends[i]],
+        )
+
+    return coords
