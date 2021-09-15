@@ -62,6 +62,62 @@ class GenerateSingleLayerLoops(SimAction):
         return shared_config_added_data, action_config
 
 
+class GenerateRandomParticleTypes(SimAction):
+    def __init__(
+        self,
+        freqs=[0.5, 0.5],
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        freqs_norm = np.array(action_config['freqs'])
+        action_config['freqs_norm'] /= freqs_norm.sum()
+       
+        shared_config_added_data['particle_types'] = np.random.choice(
+            a=np.arange(freqs_norm.size),
+            size=shared_config['N'],
+            p=freqs_norm
+        )
+
+        return shared_config_added_data, action_config
+
+
+class GenerateRandomBlockParticleTypes(SimAction):
+    def __init__(
+        self,
+        avg_block_lens=[2,2],
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        # This solution is slow-ish (1 sec for 1e6 particles), but simple
+        N = shared_config['N']
+        avg_block_lens = action_config['avg_block_lens']
+        n_types = len(avg_block_lens)
+        particle_types = np.full(N, -1)
+
+        p, new_p, t = 0, 0, 0
+        while new_p <= N:
+            new_p = p + np.random.geometric(1/avg_block_lens[t])
+            particle_types[p:min(new_p,N)] = t
+            t = (t+1) % n_types
+            p = new_p
+            
+        shared_config_added_data['particle_types'] = particle_types
+
+        return shared_config_added_data, action_config
+
+
 class GenerateTwoLayerLoops(SimAction):
     def __init__(
         self,
