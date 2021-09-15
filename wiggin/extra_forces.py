@@ -78,7 +78,7 @@ def quartic_repulsive_attractive(
         ""
         "Erep =(1-2*rnorm2+rnorm2*rnorm2) * REPe;"
         "rnorm2 = rnorm*rnorm;"
-        "rnorm = r/REPsigma"
+        "rnorm = r/REPsigma;"
         ""
         "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTRe;"
         "rnorm_shift2 = rnorm_shift*rnorm_shift;"
