@@ -204,6 +204,34 @@ class AddLoops(SimAction):
         )
 
 
+
+class AddBackboneStiffness(SimAction):
+    def __init__(
+        self,
+        k=1.5,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        bb_list = sorted(shared_config['backbone'])
+        triplets = [bb_list[i:i+3] for i in range(len(bb_list)-2)]
+        sim.add_force(
+            forces.angle_force(
+                sim_object=sim, 
+                triplets=triplets, 
+                k=self_conf['k'], 
+                theta_0=np.pi, 
+                name="backbone_stiffness", 
+                override_checks=True
+            )
+        )
+
+
 class AddBackboneTethering(SimAction):
     def __init__(
         self,
