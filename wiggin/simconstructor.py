@@ -569,6 +569,52 @@ class AddGlobalVariableDynamics(SimAction):
             sim.context.setParameter(self_conf['variable_name'], new_val)
 
 
+
+class AddDynamicParameterUpdate(SimAction):
+    def __init__(
+        self,
+        force,
+        param,
+        ts = [90, 100],
+        vals = [0, 1.0], 
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+        return shared_config_added_data, action_config
+
+
+    def run_loop(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        t = sim.block
+        ts = self_conf['ts']
+        vals = self_conf['vals']
+
+        if ts[0] <= t <= ts[-1]:
+            
+            step = bisect.bisect_left(ts, t) - 1
+            if step == -1:
+                step = 0
+            
+            
+            param_full_name = f'{self_conf["force"]}_{self_conf["param"]}'
+            cur_val = sim.context.getParameter(param_full_name) 
+            new_val = np.interp(t, ts[step:step+2], vals[step:step+2])
+            
+            if cur_val != new_val:
+                 
+                logging.info(f'set {param_full_name} to {new_val}')
+                sim.context.setParameter(param_full_name, new_val)
+
+
+
 # class SaveConformationTxt(SimAction):
 
 #     def run_loop(self, shared_config, action_configs, sim):
