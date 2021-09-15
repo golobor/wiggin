@@ -429,6 +429,25 @@ class CrosslinkParallelChains(SimAction):
         )
 
 
+class GenerateRWInitialConformation(SimAction):
+    def __init__(
+        self
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def configure(self, shared_config, action_configs):
+        shared_config_added_data, action_config = super().configure(
+            shared_config, action_configs)
+
+        shared_config_added_data['initial_conformation'] = (
+            starting_conformations.create_random_walk(step_size=1.0, N=shared_config['N'])
+        )
+
+        return shared_config_added_data, action_config
+
+
 class SetInitialConformation(SimAction):
 
     def run_init(self, shared_config, action_configs, sim):
