@@ -561,12 +561,20 @@ class AddStaticCylinderCompression(SimAction):
 
         if ((action_config['z_min'] is None) != (action_config['z_max'] is None)):
             raise ValueError('Both z_min and z_max have to be either specified or left as None.')
-        elif ((action_config['z_min'] is None) and (action_config['z_max'] is None)):
-            coords = shared_config['initial_conformation']
+        coords = shared_config['initial_conformation']
+        if (action_config['z_min'] is None):
             action_config['z_min'] = coords[:,2].min()
-            action_config['z_max'] = coords[:,2].max()
+        elif (action_config['z_min'] == 'bb'):
+            action_config['z_min'] = coords[shared_config['backbone']][:,2].min()
         else:
             action_config['z_min'] = action_config['z_min']
+            
+            
+        if (action_config['z_max'] is None):
+            action_config['z_max'] = coords[:,2].max()
+        elif (action_config['z_max'] == 'bb'):
+            action_config['z_max'] = coords[shared_config['backbone']][:,2] .max()
+        else:
             action_config['z_max'] = action_config['z_max']
 
 
@@ -589,7 +597,7 @@ class AddStaticCylinderCompression(SimAction):
         self_conf = action_configs[self.name]
 
         sim.add_force(
-            forces.cylindrical_confinement(
+            extra_forces.cylindrical_confinement_2(
                 sim_object=sim,
                 r=self_conf['r'],
                 top=self_conf['z_max'],
