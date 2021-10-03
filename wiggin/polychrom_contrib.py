@@ -6,6 +6,8 @@ import shelve
 import numpy as np
 import pandas as pd
 
+import numba
+
 import polychrom
 import polychrom.polymer_analyses
 import polychrom.hdf5_format
@@ -150,6 +152,7 @@ def _bin_contacts(contacts, N, bins_decade=10, bins=None, ring=False):
             "dist": bin_mids,
             "contact_freq": contact_freqs,
             "n_particle_pairs": pairs_per_bin,
+            "n_contacts": contacts_per_bin,
             "min_dist": bins[:-1],
             "max_dist": bins[1:],
         }
@@ -368,3 +371,111 @@ def cached_contact_vs_dist(
     cache_f.close()
 
     return sc
+
+
+@numba.njit
+def log_thin(xs, min_log10_step=0.1):
+    xs_thinned = [xs[0]]
+    prev = xs[0]
+    min_ratio = 10 ** min_log10_step
+    for x in xs[1:]:
+        if x > prev * min_ratio:
+            xs_thinned.append(x)
+            prev = x
+
+    if xs_thinned[-1] != xs[-1]:
+        xs_thinned.append(xs[-1])
+    return np.array(xs_thinned)
+
+
+def log_interp(xs, xp, fp):
+    return np.exp(
+        np.interp(
+            np.log(xs),
+            np.log(xp),
+            np.log(fp),
+        )
+    )
+
+
+@numba.jit(nopython=True)
+def log_smooth_ratio(
+    xs,
+    y_numerators,
+    y_denominators,
+    sigma_log10=0.1,
+    window_sigma=5,
+    steps_per_sigma=10,
+):
+    assert xs.ndim == 1
+    assert xs.shape == y_numerators.shape == y_denominators.shape
+
+    thinned_xs = xs
+    if steps_per_sigma:
+        thinned_xs = log_thin(xs, sigma_log10 / steps_per_sigma)
+
+    N = thinned_xs.size
+
+    log_xs = np.log10(xs)
+    log_thinned_xs = np.log10(thinned_xs)
+
+    y_numerators_smooth = np.zeros(N)  # , dtype=np.float)
+    y_denominators_smooth = np.zeros(N)  # , dtype=np.float)
+
+    for i in range(N):
+        cur_log_x = log_thinned_xs[i]
+        lo = np.searchsorted(log_xs, cur_log_x - sigma_log10 * window_sigma)
+        hi = np.searchsorted(log_xs, cur_log_x + sigma_log10 * window_sigma)
+        smooth_weights = np.exp(
+            -((cur_log_x - log_xs[lo:hi]) ** 2) / 2 / sigma_log10 / sigma_log10
+        )
+        y_numerators_smooth[i] = np.sum(y_numerators[lo:hi] * smooth_weights)
+        y_denominators_smooth[i] = np.sum(y_denominators[lo:hi] * smooth_weights)
+
+    return thinned_xs, y_numerators_smooth, y_denominators_smooth
+
+
+def agg_smooth_cvd(cvd, sigma_log10=0.1, window_sigma=5, steps_per_sigma=10, **kwargs):
+
+    dist_col = kwargs.get("dist_col", "dist")
+    n_pairs_col = kwargs.get("n_pairs_col", "n_particle_pairs")
+    n_contacts_col = kwargs.get("n_contacts_col", "n_contacts")
+    contact_freq_col = kwargs.get("contact_freq_col", "contact_freq")
+    smooth_suffix = kwargs.get("smooth_suffix", ".smoothed")
+
+    cvd_agg = (
+        cvd.groupby(dist_col)
+        .agg(
+            {
+                n_pairs_col: "sum",
+                n_contacts_col: "sum",
+            }
+        )
+        .reset_index()
+    )
+
+    bin_mids, balanced, areas = log_smooth_ratio(
+        cvd_agg[dist_col].values.astype(np.float64),
+        cvd_agg[n_contacts_col].values.astype(np.float64),
+        cvd_agg[n_pairs_col].values.astype(np.float64),
+        sigma_log10=sigma_log10,
+        steps_per_sigma=steps_per_sigma,
+    )
+
+    if steps_per_sigma:
+        cvd_agg[n_pairs_col + smooth_suffix] = log_interp(
+            cvd_agg[dist_col].values, bin_mids, areas
+        )
+        cvd_agg[n_contacts_col + smooth_suffix] = log_interp(
+            cvd_agg[dist_col].values, bin_mids, balanced
+        )
+    else:
+        cvd_agg[n_pairs_col + smooth_suffix] = areas
+        cvd_agg[n_contacts_col + smooth_suffix] = balanced
+
+    cvd_agg[contact_freq_col] = cvd_agg[n_contacts_col] / cvd_agg[n_pairs_col]
+    cvd_agg[contact_freq_col + smooth_suffix] = (
+        cvd_agg[n_contacts_col + smooth_suffix] / cvd_agg[n_pairs_col + smooth_suffix]
+    )
+
+    return cvd_agg
