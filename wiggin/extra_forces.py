@@ -1,4 +1,5 @@
 import collections
+import logging
 
 import numpy as np
 
@@ -307,6 +308,72 @@ def linear_tether_particles(
             print("particle %d tethered! " % i)
     
     return force
+
+
+def angular_tether_particles(
+        sim_object, 
+        particles=None, 
+        angle_wiggle=np.pi / 16,
+        min_r=0.1,
+        angles="current",
+        name="linear_tethers"
+        ):
+    """tethers the angles of particles in the xy plane.
+    
+    Parameters
+    ----------
+
+    particles : list of ints
+        List of particles to be tethered (fixed in space).
+        Negative values are allowed. If None then tether all particles.
+    k : int, optional
+        The steepness of the tethering potential.
+        Values >30 will require decreasing potential, but will make tethering 
+        rock solid.
+        Can be provided as a vector [kx, ky, kz].
+    """
+    
+    energy = (
+        "k * (1 - (x * x0 + y * y0) / sqrt(x*x + y*y + t*t) / sqrt(x0*x0 + y0*y0 ) )"
+    )
+
+    force = openmm.CustomExternalForce(energy)
+    force.name = name
+
+    if particles is None:
+        particles = range(sim_object.N)
+        N_tethers = sim_object.N
+    else:
+        particles = [sim_object.N+i if i < 0 else i for i in particles]
+        N_tethers = len(particles)
+
+    k = 1 / angle_wiggle / angle_wiggle
+    
+    force.addGlobalParameter("t", min_r * sim_object.conlen)
+    force.addGlobalParameter("k", k * sim_object.kT)
+    force.addPerParticleParameter("x0")
+    force.addPerParticleParameter("y0")
+
+    if angles == "current":
+        angles = np.array([sim_object.data[i] for i in particles])[:, :2]
+    else:
+        angles = np.array(angles)
+        if angles.ndim == 1:
+            angles = np.vstack([
+                np.cos(angles), np.sin(angles)
+            ]).T * sim_object.conlen
+        elif (angles.ndim == 2) and (angles.shape[0] == N_tethers) and (angles.shape[1] == 2):
+            angles = np.array(angles) * sim_object.conlen
+        else:
+            raise ValueError('Unknown format for angles')
+
+    for i, (x0, y0) in zip(particles, angles):  # adding all the particles on which force acts
+        force.addParticle(int(i), (float(x0), float(y0)))
+        if sim_object.verbose:
+            logging.debug("Particle angle %d tethered! " % i)
+            
+    return force
+
 
 
 
