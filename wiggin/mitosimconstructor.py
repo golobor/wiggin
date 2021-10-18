@@ -217,7 +217,7 @@ class AddLoops(SimAction):
                 bonds=shared_config['loops'],
                 bondWiggleDistance=self_conf['wiggle_dist'],
                 bondLength=self_conf['bond_length'],
-                name='LoopHarmonicBonds',
+                name='loop_harmonic_bonds',
                 override_checks=True
             )
         )
@@ -306,6 +306,61 @@ class AddBackboneTethering(SimAction):
             )
         )
         
+
+class AddBackboneAngularTethering(SimAction):
+    def __init__(
+        self,
+        angle_wiggle=np.pi/16,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        sim.add_force(
+            extra_forces.angular_tether_particles(
+                sim_object=sim, 
+                particles=shared_config['backbone'], 
+                angle_wiggle=self_conf['angle_wiggle'],
+                angles='current',
+                name='tether_backbone_angle'
+            )
+        )
+        
+
+class AddRootLoopAngularTethering(SimAction):
+    def __init__(
+        self,
+        angle_wiggle=np.pi/16,
+    ):
+        params = {k:v for k,v in locals().items() if k not in ['self']} # This line must be the first in the function.
+        super().__init__(**params)
+
+
+    def run_init(self, shared_config, action_configs, sim):
+        # do not use self.params!
+        # only use parameters from action_configs[self.name] and shared_config
+        self_conf = action_configs[self.name]
+
+        loops = shared_config['loops']
+        root_loops = loops[looplib.looptools.get_roots(loops)]
+        root_loop_particles = sorted(np.unique(root_loops))
+
+        sim.add_force(
+            extra_forces.angular_tether_particles(
+                sim_object=sim, 
+                particles=root_loop_particles, 
+                angle_wiggle=self_conf['angle_wiggle'],
+                angles='current',
+                name='tether_root_loops_angle'
+            )
+        )
+        
+
 
 class AddTipsTethering(SimAction):
     def __init__(
