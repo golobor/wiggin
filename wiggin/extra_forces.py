@@ -6,20 +6,18 @@ import numpy as np
 from polychrom.forces import openmm
 
 
-def quartic_repulsive(
-    sim_object, trunc=3.0, radiusMult=1.0, name="quartic_repulsive"
-):
+def quartic_repulsive(sim_object, trunc=3.0, radiusMult=1.0, name="quartic_repulsive"):
     """
     This is one of the simplest repulsive potential, a polynomial of fourth power.
     It has the value of `trunc` at zero.
     It seems to be ~10% slower than polynomial_repulsive, but more stable.
-    
+
     Parameters
     ----------
     trunc : float
         the energy value around r=0
     """
-    
+
     radius = sim_object.conlen * radiusMult
     nbCutOffDist = radius
     repul_energy = (
@@ -31,9 +29,9 @@ def quartic_repulsive(
     force = openmm.CustomNonbondedForce(repul_energy)
     force.name = name
 
-    force.addGlobalParameter("REPe", trunc * sim_object.kT )
-    force.addGlobalParameter("REPsigma", radius )
-    
+    force.addGlobalParameter("REPe", trunc * sim_object.kT)
+    force.addGlobalParameter("REPsigma", radius)
+
     for _ in range(sim_object.N):
         force.addParticle(())
 
@@ -51,9 +49,9 @@ def quartic_repulsive_attractive(
     name="quartic_repulsive_attractive",
 ):
     """
-    This is one of the simplest potentials that combine a soft repulsive core with 
+    This is one of the simplest potentials that combine a soft repulsive core with
     an attractive shell. It is based on 4th-power polynomials.
-     
+
     Parameters
     ----------
     repulsionEnergy: float
@@ -116,12 +114,12 @@ def homotypic_quartic_repulsive_attractive(
     name="homotypic_quartic_repulsive_attractive",
 ):
     """
-    This is one of the simplest potentials that combine a soft repulsive core with 
+    This is one of the simplest potentials that combine a soft repulsive core with
     an attractive shell. It is based on 4th-power polynomials.
-    
+
     Monomers of type 0 do not get extra attractive energy.
 
-     
+
     Parameters
     ----------
     repulsionEnergy: float
@@ -166,7 +164,7 @@ def homotypic_quartic_repulsive_attractive(
         "ATTRdelta", sim_object.conlen * (attractionRadius - repulsionRadius) / 2.0
     )
     force.addGlobalParameter("ATTReAdd", selectiveAttractionEnergy * sim_object.kT)
-    
+
     force.addPerParticleParameter("type")
 
     for i in range(sim_object.N):
@@ -178,17 +176,17 @@ def homotypic_quartic_repulsive_attractive(
 
 
 def max_dist_bonds(
-        sim_object,
-        bonds,
-        max_dist=1.0,
-        k=5,
-        axes=['x', 'y', 'z'],
-        name="max_dist_bonds",
-        ):
+    sim_object,
+    bonds,
+    max_dist=1.0,
+    k=5,
+    axes=["x", "y", "z"],
+    name="max_dist_bonds",
+):
     """Adds harmonic bonds
     Parameters
     ----------
-    
+
     bonds : iterable of (int, int)
         Pairs of particle indices to be connected with a bond.
     bondWiggleDistance : float
@@ -198,11 +196,13 @@ def max_dist_bonds(
         The length of the bond.
         Can be provided per-particle.
     """
-    
-    r_sqr_expr = '+'.join([f'({axis}1-{axis}2)^2' for axis in axes])
-    energy = ("kt * k * step(dr) * (sqrt(dr*dr + t*t) - t);"
-            + "dr = sqrt(r_sqr + tt^2) - max_dist + 10*t;"
-            + 'r_sqr = ' + r_sqr_expr
+
+    r_sqr_expr = "+".join([f"({axis}1-{axis}2)^2" for axis in axes])
+    energy = (
+        "kt * k * step(dr) * (sqrt(dr*dr + t*t) - t);"
+        + "dr = sqrt(r_sqr + tt^2) - max_dist + 10*t;"
+        + "r_sqr = "
+        + r_sqr_expr
     )
 
     print(energy)
@@ -212,28 +212,25 @@ def max_dist_bonds(
 
     force.addGlobalParameter("kt", sim_object.kT)
     force.addGlobalParameter("k", k / sim_object.conlen)
-    force.addGlobalParameter("t",  0.1 / k * sim_object.conlen)
+    force.addGlobalParameter("t", 0.1 / k * sim_object.conlen)
     force.addGlobalParameter("tt", 0.01 * sim_object.conlen)
     force.addGlobalParameter("max_dist", max_dist * sim_object.conlen)
-    
+
     for _, (i, j) in enumerate(bonds):
         if (i >= sim_object.N) or (j >= sim_object.N):
             raise ValueError(
-                "\nCannot add bond with monomers %d,%d that"\
-                "are beyound the polymer length %d" % (i, j, sim_object.N))
-        
-        force.addBond((int(i), int(j)), []) 
+                "\nCannot add bond with monomers %d,%d that"
+                "are beyound the polymer length %d" % (i, j, sim_object.N)
+            )
+
+        force.addBond((int(i), int(j)), [])
 
     return force
 
 
 def linear_tether_particles(
-        sim_object, 
-        particles=None, 
-        k=5, 
-        positions="current",
-        name="linear_tethers"
-        ):
+    sim_object, particles=None, k=5, positions="current", name="linear_tethers"
+):
     """tethers particles in the 'particles' array.
     Increase k to tether them stronger, but watch the system!
 
@@ -245,11 +242,11 @@ def linear_tether_particles(
         Negative values are allowed. If None then tether all particles.
     k : int, optional
         The steepness of the tethering potential.
-        Values >30 will require decreasing potential, but will make tethering 
+        Values >30 will require decreasing potential, but will make tethering
         rock solid.
         Can be provided as a vector [kx, ky, kz].
     """
-    
+
     energy = (
         "   kx * ( sqrt((x - x0)^2 + t*t) - t ) "
         " + ky * ( sqrt((y - y0)^2 + t*t) - t ) "
@@ -263,25 +260,27 @@ def linear_tether_particles(
         particles = range(sim_object.N)
         N_tethers = sim_object.N
     else:
-        particles = [sim_object.N+i if i<0 else i 
-                    for i in particles]
+        particles = [sim_object.N + i if i < 0 else i for i in particles]
         N_tethers = len(particles)
-
 
     if isinstance(k, collections.abc.Iterable):
         k = np.array(k)
         if k.ndim == 1:
             if k.shape[0] != 3:
-                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
-            k = np.broadcast_to(k, (N_tethers,3))
+                raise ValueError(
+                    "k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!"
+                )
+            k = np.broadcast_to(k, (N_tethers, 3))
         elif k.ndim == 2:
             if (k.shape[0] != N_tethers) and (k.shape[1] != 3):
-                raise ValueError('k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!')
+                raise ValueError(
+                    "k must either be either a scalar, a vector of 3 elements or an (Nx3) matrix!"
+                )
     else:
-        k = np.broadcast_to(k, (N_tethers,3))
+        k = np.broadcast_to(k, (N_tethers, 3))
 
     if k.mean():
-        force.addGlobalParameter("t", (1. / k.mean()) * sim_object.conlen / 10.)
+        force.addGlobalParameter("t", (1.0 / k.mean()) * sim_object.conlen / 10.0)
     else:
         force.addGlobalParameter("t", sim_object.conlen)
     force.addPerParticleParameter("kx")
@@ -296,30 +295,37 @@ def linear_tether_particles(
     else:
         positions = np.array(positions) * sim_object.conlen
 
-    for i, (kx,ky,kz), (x,y,z) in zip(particles, k, positions):  # adding all the particles on which force acts
+    for i, (kx, ky, kz), (x, y, z) in zip(
+        particles, k, positions
+    ):  # adding all the particles on which force acts
         i = int(i)
-        force.addParticle(i, (kx * sim_object.kT / sim_object.conlen,
-                              ky * sim_object.kT / sim_object.conlen,
-                              kz * sim_object.kT / sim_object.conlen,
-                              x,y,z
-                             )
-                         )
-        if sim_object.verbose == True:
+        force.addParticle(
+            i,
+            (
+                kx * sim_object.kT / sim_object.conlen,
+                ky * sim_object.kT / sim_object.conlen,
+                kz * sim_object.kT / sim_object.conlen,
+                x,
+                y,
+                z,
+            ),
+        )
+        if sim_object.verbose:
             print("particle %d tethered! " % i)
-    
+
     return force
 
 
 def angular_tether_particles(
-        sim_object, 
-        particles=None, 
-        angle_wiggle=np.pi / 16,
-        min_r=0.1,
-        angles="current",
-        name="linear_tethers"
-        ):
+    sim_object,
+    particles=None,
+    angle_wiggle=np.pi / 16,
+    min_r=0.1,
+    angles="current",
+    name="linear_tethers",
+):
     """tethers the angles of particles in the xy plane.
-    
+
     Parameters
     ----------
 
@@ -328,11 +334,11 @@ def angular_tether_particles(
         Negative values are allowed. If None then tether all particles.
     k : int, optional
         The steepness of the tethering potential.
-        Values >30 will require decreasing potential, but will make tethering 
+        Values >30 will require decreasing potential, but will make tethering
         rock solid.
         Can be provided as a vector [kx, ky, kz].
     """
-    
+
     energy = (
         "k * (1 - (x * x0 + y * y0) / sqrt(x*x + y*y + t*t) / sqrt(x0*x0 + y0*y0 ) )"
     )
@@ -344,11 +350,11 @@ def angular_tether_particles(
         particles = range(sim_object.N)
         N_tethers = sim_object.N
     else:
-        particles = [sim_object.N+i if i < 0 else i for i in particles]
+        particles = [sim_object.N + i if i < 0 else i for i in particles]
         N_tethers = len(particles)
 
     k = 1 / angle_wiggle / angle_wiggle
-    
+
     force.addGlobalParameter("t", min_r * sim_object.conlen)
     force.addGlobalParameter("k", k * sim_object.kT)
     force.addPerParticleParameter("x0")
@@ -359,22 +365,24 @@ def angular_tether_particles(
     else:
         angles = np.array(angles)
         if angles.ndim == 1:
-            angles = np.vstack([
-                np.cos(angles), np.sin(angles)
-            ]).T * sim_object.conlen
-        elif (angles.ndim == 2) and (angles.shape[0] == N_tethers) and (angles.shape[1] == 2):
+            angles = np.vstack([np.cos(angles), np.sin(angles)]).T * sim_object.conlen
+        elif (
+            (angles.ndim == 2)
+            and (angles.shape[0] == N_tethers)
+            and (angles.shape[1] == 2)
+        ):
             angles = np.array(angles) * sim_object.conlen
         else:
-            raise ValueError('Unknown format for angles')
+            raise ValueError("Unknown format for angles")
 
-    for i, (x0, y0) in zip(particles, angles):  # adding all the particles on which force acts
+    for i, (x0, y0) in zip(
+        particles, angles
+    ):  # adding all the particles on which force acts
         force.addParticle(int(i), (float(x0), float(y0)))
         if sim_object.verbose:
             logging.debug("Particle angle %d tethered! " % i)
-            
+
     return force
-
-
 
 
 def heteropolymer_quartic_repulsive_attractive(
@@ -391,37 +399,40 @@ def heteropolymer_quartic_repulsive_attractive(
     A version of smooth square well potential that enables the simulation of
     heteropolymers. Every monomer is assigned a number determining its type,
     then one can specify additional attraction between the types with the
-    interactionMatrix. Repulsion between all monomers is the same, except for 
-    extraHardParticles, which, if specified, have higher repulsion energy. 
-    
+    interactionMatrix. Repulsion between all monomers is the same, except for
+    extraHardParticles, which, if specified, have higher repulsion energy.
+
     The overall potential is the same as in :py:func:`polychrom.forces.smooth_square_well`
-    
+
     Treatment of extraHard particles is the same as in :py:func:`polychrom.forces.selective_SSW`
 
     This is an extension of SSW (smooth square well) force in which:
-    
+
     a) You can give monomerTypes (e.g. 0, 1, 2 for A, B, C)
        and interaction strengths between these types. The corresponding entry in
        interactionMatrix is multiplied by selectiveAttractionEnergy to give the actual
-       **additional** depth of the potential well.        
-    b) You can select a subset of particles and make them "extra hard". See selective_SSW force for descrition. 
-    
+       **additional** depth of the potential well.
+    b) You can select a subset of particles and make them "extra hard". 
+    See selective_SSW force for descrition.
+
     Force summary
     *************
-    
-    Potential is the same as smooth square well, with the following parameters for particles i and j: 
-    
-    * Attraction energy (i,j) = attractionEnergy + selectiveAttractionEnergy * interactionMatrix[i,j] 
 
-    * Repulsion Energy (i,j) = repulsionEnergy + selectiveRepulsionEnergy;  if (i) or (j) are extraHard
-    * Repulsion Energy (i,j) = repulsionEnergy;  otherwise 
+    Potential is the same as smooth square well, with the following parameters for 
+    particles i and j:
+
+    * Attraction energy (i,j) = (attractionEnergy 
+    + selectiveAttractionEnergy * interactionMatrix[i,j])
+
+    * Repulsion Energy (i,j) = repulsionEnergy + selectiveRepulsionEnergy; if i or j are extraHard
+    * Repulsion Energy (i,j) = repulsionEnergy;  otherwise
 
     Parameters
     ----------
 
     interactionMatrix: np.array
         the **EXTRA** interaction strenghts between the different types.
-        Only upper triangular values are used. See "Force summary" above 
+        Only upper triangular values are used. See "Force summary" above
     monomerTypes: list of int or np.array
         the type of each monomer, starting at 0
     extraHardParticlesIdxs : list of int
@@ -451,17 +462,20 @@ def heteropolymer_quartic_repulsive_attractive(
     """
 
     if not attractionEnergies:
-        raise ValueError('Please provide interaction energies as a list of (i,j, energy)!')
-    
-    n_interactions = len(set((i,j) for i,j,e in attractionEnergies))
-    n_interactions_simplified = len(set((min(i,j), max(i,j)) for i,j,e in attractionEnergies)) 
-    if (n_interactions != n_interactions_simplified):
-        raise ValueError('Each pairwise interaction should be specified only once!')
-    
-    attractionEnergiesSym = (
-        list(attractionEnergies) 
-        + [(j,i,e) for (i,j,e) in attractionEnergies if i != j]
+        raise ValueError(
+            "Please provide interaction energies as a list of (i,j, energy)!"
+        )
+
+    n_interactions = len(set((i, j) for i, j, e in attractionEnergies))
+    n_interactions_simplified = len(
+        set((min(i, j), max(i, j)) for i, j, e in attractionEnergies)
     )
+    if n_interactions != n_interactions_simplified:
+        raise ValueError("Each pairwise interaction should be specified only once!")
+
+    attractionEnergiesSym = list(attractionEnergies) + [
+        (j, i, e) for (i, j, e) in attractionEnergies if i != j
+    ]
 
     # Check type info for consistency
     energy = (
@@ -471,22 +485,24 @@ def heteropolymer_quartic_repulsive_attractive(
         "rnorm2 = rnorm*rnorm;"
         "rnorm = r/REPsigma;"
         ""
-        "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTReTot * kT;"   
+        "Eattr = (-1)* (1-2*rnorm_shift2+rnorm_shift2*rnorm_shift2) * ATTReTot * kT;"
     )
-    
+
     energy += (
-        'ATTReTot = (' 
-        +' + '.join(
-            [f"delta(type1-{i})*delta(type2-{j})*INT_{i}_{j}"
-             for i, j, e in attractionEnergiesSym])
-        + ");" 
+        "ATTReTot = ("
+        + " + ".join(
+            [
+                f"delta(type1-{i})*delta(type2-{j})*INT_{i}_{j}"
+                for i, j, e in attractionEnergiesSym
+            ]
+        )
+        + ");"
     )
 
     energy += (
         "rnorm_shift2 = rnorm_shift*rnorm_shift;"
         "rnorm_shift = (r - REPsigma - ATTRdelta)/ATTRdelta"
     )
-
 
     force = openmm.CustomNonbondedForce(energy)
     force.name = name
@@ -512,19 +528,17 @@ def heteropolymer_quartic_repulsive_attractive(
     return force
 
 
-
-
 def cylindrical_confinement_2(
-    sim_object, 
-    r,  
+    sim_object,
+    r,
     k=1.0,
-    transition_width=3, 
+    transition_width=3,
     top=None,
     bottom=None,
-    name="cylindrical_confinement"
+    name="cylindrical_confinement",
 ):
 
-    if (bottom is not None and top is not None):
+    if bottom is not None and top is not None:
         force = openmm.CustomExternalForce(
             "kT * k * ("
             "   step(dr)  * dr  * dr * dr  / (dr * dr + t*t)"
@@ -539,18 +553,16 @@ def cylindrical_confinement_2(
         force.addGlobalParameter("bottom", bottom * sim_object.conlen)
     else:
         force = openmm.CustomExternalForce(
-            "kT * k * step(dr) * dr * dr * dr/(dr*dt+t*t);"
-            "dr = sqrt(x^2 + y^2) - r"
+            "kT * k * step(dr) * dr * dr * dr/(dr*dt+t*t);" "dr = sqrt(x^2 + y^2) - r"
         )
     force.name = name
 
     for i in range(sim_object.N):
         force.addParticle(i, [])
 
-    force.addGlobalParameter("k", k /  sim_object.conlen)
+    force.addGlobalParameter("k", k / sim_object.conlen)
     force.addGlobalParameter("kT", sim_object.kT)
     force.addGlobalParameter("r", r * sim_object.conlen)
     force.addGlobalParameter("t", transition_width * sim_object.conlen)
-    
-    return force
 
+    return force
