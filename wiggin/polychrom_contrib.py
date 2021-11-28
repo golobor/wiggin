@@ -36,6 +36,7 @@ def get_last_block_idx(folder):
     idx_spans = get_idx_spans(folder)
     if len(idx_spans) == 0:
         return None
+
     last_block_idx = max(r[1] for r in idx_spans)
 
     return last_block_idx
@@ -360,12 +361,13 @@ def cached_contact_vs_dist(
     coords = fetch_block(folder, block_idx)
     sc = gaussian_contact_vs_dist(
         coords,
+        contact_vs_dist_func=contact_vs_dist,
+        random_sigma=random_sigma,
+        random_reps=random_reps,
         bins_decade=bins_decade,
         bins=bins,
         contact_radius=contact_radius,
         ring=ring,
-        random_sigma=random_sigma,
-        random_reps=random_reps,
     )
     cache_f[key] = sc
     cache_f.close()
