@@ -22,7 +22,7 @@ class GenerateSingleLayerLoops(SimAction):
     def __init__(
         self,
         loop_size=400,
-        # loop_gamma_k = 1,
+        loop_gamma_k = 1,
         loop_spacing=1,
         chain_idxs=None,
     ):
@@ -61,11 +61,24 @@ class GenerateSingleLayerLoops(SimAction):
         loops = []
         for start, end, is_ring in chains:
             chain_len = end - start
-            loops.append(
-                looplib.random_loop_arrays.exponential_loop_array(
-                    chain_len, action_config["loop_size"], action_config["loop_spacing"]
+            if action_config["loop_gamma_k"] == 1:
+                loops.append(
+                    looplib.random_loop_arrays.exponential_loop_array(
+                        chain_len, 
+                        action_config["loop_size"], 
+                        action_config["loop_spacing"]
+                    )
                 )
-            )
+            else:
+                loops.append(
+                    looplib.random_loop_arrays.gamma_loop_array(
+                        chain_len, 
+                        action_config["loop_size"], 
+                        action_config["loop_gamma_k"],
+                        action_config["loop_spacing"],
+                        min_loop_size=3
+                    )
+                )
             loops[0] += start
         loops = np.vstack(loops)
 
