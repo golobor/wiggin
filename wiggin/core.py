@@ -2,7 +2,7 @@ import copy
 import os
 import logging
 import inspect
-import typing
+# import typing
 
 from dataclasses import dataclass, field
 
@@ -15,7 +15,8 @@ _VERBOSE = True
 logging.basicConfig(level=logging.INFO)
 
 
-class ConfigEntry(typing.NamedTuple):
+@dataclass
+class ConfigEntry:
     shared: dict
     action: dict
 
@@ -32,7 +33,8 @@ class SimAction:
         return self
 
     def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+        newconf = ConfigEntry(shared={}, action=self.asdict())
+
         return newconf
 
     def spawn_actions(self):
@@ -123,7 +125,7 @@ class SimConstructor:
         run_f_name = f'run_{stage}'
         if not hasattr(action, run_f_name):
             return True
-        
+
         out = getattr(action, run_f_name)(
             ConfigEntry(shared=self.config['shared'],
                         action=self.newconf['actions'][action.name]),

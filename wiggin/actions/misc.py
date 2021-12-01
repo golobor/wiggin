@@ -1,21 +1,20 @@
-import copy
-from .core import SimAction, ConfigEntry
+from dataclasses import dataclass
+
+from typing import Any
+from ..core import SimAction, ConfigEntry
 
 import polychrom
 import polychrom.forces
 
 
+@dataclass
 class CrosslinkParallelChains(SimAction):
-    def __init__(
-        self,
-        chains=None,
-        bond_length=1.0,
-        wiggle_dist=0.025,
-    ):
-        super().__init__(**locals())
+    chains: Any = None
+    bond_length: float = 1.0
+    wiggle_dist: float = 0.025
 
     def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+        newconf = ConfigEntry(shared={}, action=self.asdict())
 
         if newconf.action["chains"] is None:
             newconf.action["chains"] = [

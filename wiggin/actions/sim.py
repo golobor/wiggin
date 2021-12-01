@@ -1,19 +1,15 @@
-import copy
 import os
 import sys
 import socket
-import numbers
 import shelve
 import bisect
 import logging
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any, Sequence
+import dataclasses
 from dataclasses import dataclass
 
-from .core import SimAction, ConfigEntry
-from . import extra_forces
-
-import numpy as np
+from ..core import SimAction, ConfigEntry
 
 import polychrom
 import polychrom.simulation
@@ -82,6 +78,7 @@ class InitializeSimulation(SimAction):
         return sim
 
 
+@dataclass
 class BlockStep(SimAction):
     num_blocks: int = 100
     block_size: int = int(1e4)
@@ -97,6 +94,7 @@ class BlockStep(SimAction):
             return False
 
 
+@dataclass
 class LocalEnergyMinimization(SimAction):
     max_iterations: int = 1000
     tolerance: float = 1
@@ -112,190 +110,23 @@ class LocalEnergyMinimization(SimAction):
         )
 
 
-class AddChains(SimAction):
-    def __init__(
-        self,
-        chains=((0, None, 0),),
-        bond_length=1.0,
-        wiggle_dist=0.025,
-        stiffness_k=None,
-        repulsion_e=2.5,  # TODO: implement np.inf
-        attraction_e=None,
-        attraction_r=None,
-        except_bonds=False,
-    ):
-        
-        super().__init__(**locals())
-
-    def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=self.asdict())
-
-        if hasattr(newconf.action["chains"], "__iter__") and hasattr(
-            newconf.action["chains"][0], "__iter__"
-        ):
-            newconf.shared["chains"] = newconf.action["chains"]
-        elif hasattr(newconf.action["chains"], "__iter__") and isinstance(
-            newconf.action["chains"][0], numbers.Number
-        ):
-            edges = np.r_[0, np.cumsum(newconf.action["chains"])]
-            chains = [(st, end, False) for st, end in zip(edges[:-1], edges[1:])]
-            newconf.action["chains"] = chains
-            newconf.shared["chains"] = chains
-
-        return newconf
-
-    def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
-        # only use parameters from config.action and config.shared
-
-        nonbonded_force_func = None
-        nonbonded_force_kwargs = {}
-        if config.action["repulsion_e"]:
-            if config.action["attraction_e"] and config.action["attraction_r"]:
-                nonbonded_force_func = extra_forces.quartic_repulsive_attractive
-                nonbonded_force_kwargs = dict(
-                    repulsionEnergy=config.action["repulsion_e"],
-                    repulsionRadius=1.0,
-                    attractionEnergy=config.action["attraction_e"],
-                    attractionRadius=config.action["attraction_r"],
-                )
-
-            else:
-                nonbonded_force_func = extra_forces.quartic_repulsive
-                nonbonded_force_kwargs = {"trunc": config.action["repulsion_e"]}
-
-        sim.add_force(
-            polychrom.forcekits.polymer_chains(
-                sim,
-                chains=config.shared["chains"],
-                bond_force_func=polychrom.forces.harmonic_bonds,
-                bond_force_kwargs={
-                    "bondLength": config.action["bond_length"],
-                    "bondWiggleDistance": config.action["wiggle_dist"],
-                },
-                angle_force_func=(
-                    None if config.action["stiffness_k"] is None else polychrom.forces.angle_force
-                ),
-                angle_force_kwargs={"k": config.action["stiffness_k"]},
-                nonbonded_force_func=nonbonded_force_func,
-                nonbonded_force_kwargs=nonbonded_force_kwargs,
-                except_bonds=config.action["except_bonds"],
-            )
-        )
-
-
-class GenerateRWInitialConformation(SimAction):
-    def __init__(self):
-        
-        super().__init__(**locals())
-
-    def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=self.asdict())
-
-        newconf.shared[
-            "initial_conformation"
-        ] = polychrom.starting_conformations.create_random_walk(
-            step_size=1.0, N=config.shared["N"]
-        )
-
-        return newconf
-
-
+@dataclass
 class SetInitialConformation(SimAction):
     def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
         # only use parameters from config.action and config.shared
-    
         sim.set_data(config.shared["initial_conformation"])
 
         return sim
 
 
-class AddCylindricalConfinement(SimAction):
-    def __init__(
-        self,
-        k=0.5,
-        r=None,
-        top=None,
-        bottom=None,
-    ):
-        
-        super().__init__(**locals())
-
-    def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
-        # only use parameters from config.action and config.shared
-
-        sim.add_force(
-            polychrom.forces.cylindrical_confinement(
-                sim_object=sim,
-                r=config.action["r"],
-                top=config.action["top"],
-                bottom=config.action["bottom"],
-                k=config.action["k"],
-            )
-        )
-
-
-class AddSphericalConfinement(SimAction):
-    def __init__(
-        self,
-        k=5,
-        r="density",
-        density=1.0 / ((1.5) ** 3),
-    ):
-        
-        super().__init__(**locals())
-
-    def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
-        # only use parameters from config.action and config.shared
-
-        sim.add_force(
-            polychrom.forces.spherical_confinement(
-                sim,
-                r=config.action["r"],  # radius... by default uses certain density
-                k=config.action["k"],  # How steep the walls are
-                density=config.action["density"],  # target density, measured in particles
-                # per cubic nanometer (bond size is 1 nm)
-                # name='spherical_confinement'
-            )
-        )
-
-
-class AddTethering(SimAction):
-    def __init__(
-        self,
-        k=15,
-        particles=[],
-        positions="current",
-    ):
-        super().__init__(**locals())
-
-    def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
-        # only use parameters from config.action and config.shared
-
-        sim.add_force(
-            polychrom.forces.tether_particles(
-                sim_object=sim,
-                particles=config.action["particles"],
-                k=config.action["k"],
-                positions=config.action["positions"],
-            )
-        )
-
-
+@dataclass
 class AddDynamicParameterUpdate(SimAction):
-    def __init__(
-        self,
-        force,
-        param,
-        ts=[90, 100],
-        vals=[0, 1.0],
-        power=1.0,
-    ):
-        super().__init__(**locals())
+    force: Any
+    param: Any
+    ts: Sequence[float] = dataclasses.field(default_factory=lambda: [90, 100])
+    vals: Sequence[float] = dataclasses.field(default_factory=lambda: [0, 1.0])
+    power: float = 1.0
 
     def run_loop(self, config: ConfigEntry, sim):
         # do not use self.params!
@@ -329,13 +160,10 @@ class AddDynamicParameterUpdate(SimAction):
             sim.context.setParameter(param_full_name, new_val)
 
 
+@dataclass
 class SaveConfiguration(SimAction):
-    def __init__(
-        self,
-        backup=True,
-        mode_exists="fail",  # 'exit' 'overwrite'
-    ):
-        super().__init__(**locals())
+    backup: bool = True
+    mode_exists: str = "fail"
 
     def configure(self, config: ConfigEntry):
         newconf = ConfigEntry(shared={}, action=self.asdict())
