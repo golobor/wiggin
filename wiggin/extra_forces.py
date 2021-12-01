@@ -412,16 +412,16 @@ def heteropolymer_quartic_repulsive_attractive(
        and interaction strengths between these types. The corresponding entry in
        interactionMatrix is multiplied by selectiveAttractionEnergy to give the actual
        **additional** depth of the potential well.
-    b) You can select a subset of particles and make them "extra hard". 
+    b) You can select a subset of particles and make them "extra hard".
     See selective_SSW force for descrition.
 
     Force summary
     *************
 
-    Potential is the same as smooth square well, with the following parameters for 
+    Potential is the same as smooth square well, with the following parameters for
     particles i and j:
 
-    * Attraction energy (i,j) = (attractionEnergy 
+    * Attraction energy (i,j) = (attractionEnergy
     + selectiveAttractionEnergy * interactionMatrix[i,j])
 
     * Repulsion Energy (i,j) = repulsionEnergy + selectiveRepulsionEnergy; if i or j are extraHard

@@ -58,7 +58,9 @@ c.add_action(
         powerlaw=2,
         initial_block = 1,
         final_block = 300,
-        final_axial_compression = 2
+        final_axial_compression = 2,
+        final_per_particle_volume=1.5 * 1.5 * 1.5,
+
     )
 )
 

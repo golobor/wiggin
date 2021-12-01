@@ -1,6 +1,4 @@
-import os
-import sys
-import shelve
+import copy
 import logging
 import numbers
 
@@ -11,7 +9,7 @@ import looplib.looptools
 
 from polychrom import forces, forcekits
 
-from .simconstructor import SimAction
+from .simconstructor import SimAction, ConfigEntry
 
 from . import starting_mitotic_conformations, extra_forces
 
@@ -22,80 +20,75 @@ class GenerateSingleLayerLoops(SimAction):
     def __init__(
         self,
         loop_size=400,
-        loop_gamma_k = 1,
+        loop_gamma_k=1,
         loop_spacing=1,
         chain_idxs=None,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+
         import looplib
         import looplib.looptools
         import looplib.random_loop_arrays
 
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
-
-        if action_config["chain_idxs"] is None:
+        if self.params["chain_idxs"] is None:
             if "loop_n" in self.params:
-                N = self.params["loop_n"] * action_config["loop_size"]
-                shared_config_added_data["N"] = N
+                N = self.params["loop_n"] * self.params["loop_size"]
+                newconf.shared["N"] = N
             else:
-                N = shared_config["N"]
+                N = config.shared["N"]
             chains = [(0, N, False)]
 
         else:
-            if "chains" not in shared_config:
+            if "chains" not in config.shared:
                 raise ValueError("Chains are not configured!")
-            if hasattr(action_config["chain_idxs"], "__iter__"):
+            if hasattr(self.params["chain_idxs"], "__iter__"):
                 chains = [
-                    shared_config["chains"][i] for i in action_config["chain_idxs"]
+                    config.shared["chains"][i] for i in self.params["chain_idxs"]
                 ]
             else:
-                chains = [shared_config["chains"][int(action_config["chain_idxs"])]]
+                chains = [config.shared["chains"][int(self.params["chain_idxs"])]]
 
         loops = []
         for start, end, is_ring in chains:
             chain_len = end - start
-            if action_config["loop_gamma_k"] == 1:
+            if self.params["loop_gamma_k"] == 1:
                 loops.append(
                     looplib.random_loop_arrays.exponential_loop_array(
-                        chain_len, 
-                        action_config["loop_size"], 
-                        action_config["loop_spacing"]
+                        chain_len,
+                        self.params["loop_size"],
+                        self.params["loop_spacing"]
                     )
                 )
             else:
                 loops.append(
                     looplib.random_loop_arrays.gamma_loop_array(
-                        chain_len, 
-                        action_config["loop_size"], 
-                        action_config["loop_gamma_k"],
-                        action_config["loop_spacing"],
+                        chain_len,
+                        self.params["loop_size"],
+                        self.params["loop_gamma_k"],
+                        self.params["loop_spacing"],
                         min_loop_size=3
                     )
                 )
             loops[0] += start
         loops = np.vstack(loops)
 
-        shared_config_added_data["loops"] = (
+        newconf.shared["loops"] = (
             loops
-            if "loops" not in shared_config_added_data
-            else np.vstack([shared_config_added_data["loops"], loops])
+            if "loops" not in newconf.shared
+            else np.vstack([newconf.shared["loops"], loops])
         )
 
         try:
-            shared_config_added_data["backbone"] = looplib.looptools.get_backbone(
-                shared_config_added_data["loops"], N=N
+            newconf.shared["backbone"] = looplib.looptools.get_backbone(
+                newconf.shared["loops"], N=N
             )
         except Exception:
-            shared_config_added_data["backbone"] = None
+            newconf.shared["backbone"] = None
 
-        return shared_config_added_data, action_config
+        return newconf
 
 
 class GenerateRandomParticleTypes(SimAction):
@@ -103,24 +96,20 @@ class GenerateRandomParticleTypes(SimAction):
         self,
         freqs=[0.5, 0.5],
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+
+        freqs_norm = np.array(self.params["freqs"])
+        newconf.action["freqs_norm"] /= freqs_norm.sum()
+
+        newconf.shared["particle_types"] = np.random.choice(
+            a=np.arange(freqs_norm.size), size=config.shared["N"], p=freqs_norm
         )
 
-        freqs_norm = np.array(action_config["freqs"])
-        action_config["freqs_norm"] /= freqs_norm.sum()
-
-        shared_config_added_data["particle_types"] = np.random.choice(
-            a=np.arange(freqs_norm.size), size=shared_config["N"], p=freqs_norm
-        )
-
-        return shared_config_added_data, action_config
+        return newconf
 
 
 class GenerateRandomBlockParticleTypes(SimAction):
@@ -128,19 +117,15 @@ class GenerateRandomBlockParticleTypes(SimAction):
         self,
         avg_block_lens=[2, 2],
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         # This solution is slow-ish (1 sec for 1e6 particles), but simple
-        N = shared_config["N"]
-        avg_block_lens = action_config["avg_block_lens"]
+        N = config.shared["N"]
+        avg_block_lens = self.params["avg_block_lens"]
         n_types = len(avg_block_lens)
         particle_types = np.full(N, -1)
 
@@ -151,9 +136,9 @@ class GenerateRandomBlockParticleTypes(SimAction):
             t = (t + 1) % n_types
             p = new_p
 
-        shared_config_added_data["particle_types"] = particle_types
+        newconf.shared["particle_types"] = particle_types
 
-        return shared_config_added_data, action_config
+        return newconf
 
 
 class GenerateTwoLayerLoops(SimAction):
@@ -166,61 +151,55 @@ class GenerateTwoLayerLoops(SimAction):
         outer_inner_offset=1,
         inner_loop_gamma_k=1,
         outer_loop_gamma_k=1,
-    ):
+    ):        
+        super().__init__(**locals())
 
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
-
-    def configure(self, shared_config, action_configs):
+    def configure(self, config: ConfigEntry):
         import looplib
         import looplib.looptools
         import looplib.random_loop_arrays
 
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         if "outer_loop_n" in self.params:
-            N = self.params["outer_loop_n"] * action_config["outer_loop_size"]
-            shared_config_added_data["N"] = N
+            N = self.params["outer_loop_n"] * self.params["outer_loop_size"]
+            newconf.shared["N"] = N
         elif "inner_loop_n" in self.params:
-            N = self.params["inner_loop_n"] * action_config["inner_loop_size"]
-            shared_config_added_data["N"] = N
+            N = self.params["inner_loop_n"] * self.params["inner_loop_size"]
+            newconf.shared["N"] = N
         else:
-            N = shared_config["N"]
+            N = config.shared["N"]
 
         (
             outer_loops,
             inner_loops,
         ) = looplib.random_loop_arrays.two_layer_gamma_loop_array(
             N,
-            action_config["outer_loop_size"],
-            action_config["outer_loop_gamma_k"],
-            action_config["outer_loop_spacing"],
-            action_config["inner_loop_size"],
-            action_config["inner_loop_gamma_k"],
-            action_config["inner_loop_spacing"],
-            action_config["outer_inner_offset"],
+            self.params["outer_loop_size"],
+            self.params["outer_loop_gamma_k"],
+            self.params["outer_loop_spacing"],
+            self.params["inner_loop_size"],
+            self.params["inner_loop_gamma_k"],
+            self.params["inner_loop_spacing"],
+            self.params["outer_inner_offset"],
         )
         loops = np.vstack([outer_loops, inner_loops])
         loops.sort()
 
-        shared_config_added_data["loops"] = (
+        newconf.shared["loops"] = (
             loops
-            if "loops" not in shared_config_added_data
-            else np.vstack([shared_config_added_data["loops"], loops])
+            if "loops" not in newconf.shared
+            else np.vstack([newconf.shared["loops"], loops])
         )
 
         action_config["inner_loops"] = inner_loops
         action_config["outer_loops"] = outer_loops
 
-        shared_config_added_data["backbone"] = looplib.looptools.get_backbone(
+        newconf.shared["backbone"] = looplib.looptools.get_backbone(
             outer_loops, N=N
         )
 
-        return shared_config_added_data, action_config
+        return newconf
 
 
 class AddLoops(SimAction):
@@ -229,22 +208,19 @@ class AddLoops(SimAction):
         wiggle_dist=0.05,
         bond_length=1.0,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
             forces.harmonic_bonds(
                 sim_object=sim,
-                bonds=shared_config["loops"],
-                bondWiggleDistance=self_conf["wiggle_dist"],
-                bondLength=self_conf["bond_length"],
+                bonds=config.shared["loops"],
+                bondWiggleDistance=config.action["wiggle_dist"],
+                bondLength=config.action["bond_length"],
                 name="loop_harmonic_bonds",
                 override_checks=True,
             )
@@ -256,17 +232,14 @@ class AddRootLoopSeparator(SimAction):
         self,
         wiggle_dist=0.1,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
-        loops = shared_config["loops"]
+        loops = config.shared["loops"]
         root_loops = loops[looplib.looptools.get_roots(loops)]
         root_loop_spacers = np.vstack([root_loops[:-1][:, 1], root_loops[1:][:, 0]]).T
         root_loop_spacer_lens = root_loop_spacers[:, 1] - root_loop_spacers[:, 0]
@@ -275,7 +248,7 @@ class AddRootLoopSeparator(SimAction):
             forces.harmonic_bonds(
                 sim_object=sim,
                 bonds=root_loop_spacers,
-                bondWiggleDistance=self_conf["wiggle_dist"],
+                bondWiggleDistance=config.action["wiggle_dist"],
                 bondLength=root_loop_spacer_lens,
                 name="RootLoopSpacers",
                 override_checks=True,
@@ -288,23 +261,20 @@ class AddBackboneStiffness(SimAction):
         self,
         k=1.5,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
-        bb_list = sorted(shared_config["backbone"])
+        bb_list = sorted(config.shared["backbone"])
         triplets = [bb_list[i : i + 3] for i in range(len(bb_list) - 2)]
         sim.add_force(
             forces.angle_force(
                 sim_object=sim,
                 triplets=triplets,
-                k=self_conf["k"],
+                k=config.action["k"],
                 theta_0=np.pi,
                 name="backbone_stiffness",
                 override_checks=True,
@@ -317,21 +287,18 @@ class AddBackboneTethering(SimAction):
         self,
         k=15,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
             forces.tether_particles(
                 sim_object=sim,
-                particles=shared_config["backbone"],
-                k=self_conf["k"],
+                particles=config.shared["backbone"],
+                k=config.action["k"],
                 positions="current",
                 name="tether_backbone",
             )
@@ -343,21 +310,18 @@ class AddBackboneAngularTethering(SimAction):
         self,
         angle_wiggle=np.pi / 16,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
             extra_forces.angular_tether_particles(
                 sim_object=sim,
-                particles=shared_config["backbone"],
-                angle_wiggle=self_conf["angle_wiggle"],
+                particles=config.shared["backbone"],
+                angle_wiggle=config.action["angle_wiggle"],
                 angles="current",
                 name="tether_backbone_angle",
             )
@@ -369,17 +333,14 @@ class AddRootLoopAngularTethering(SimAction):
         self,
         angle_wiggle=np.pi / 16,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
-        loops = shared_config["loops"]
+        loops = config.shared["loops"]
         root_loops = loops[looplib.looptools.get_roots(loops)]
         root_loop_particles = sorted(np.unique(root_loops))
 
@@ -387,7 +348,7 @@ class AddRootLoopAngularTethering(SimAction):
             extra_forces.angular_tether_particles(
                 sim_object=sim,
                 particles=root_loop_particles,
-                angle_wiggle=self_conf["angle_wiggle"],
+                angle_wiggle=config.action["angle_wiggle"],
                 angles="current",
                 name="tether_root_loops_angle",
             )
@@ -401,325 +362,51 @@ class AddTipsTethering(SimAction):
         particles=(0, -1),
         positions="current",
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
             forces.tether_particles(
                 sim_object=sim,
-                particles=self_conf["particles"],
-                k=self_conf["k"],
-                positions=self_conf["positions"],
+                particles=config.action["particles"],
+                k=config.action["k"],
+                positions=config.action["positions"],
             )
         )
-
-
-class AddInitConfCylindricalConfinement(SimAction):
-    # TODO: redo as a configuration step?..
-    def __init__(
-        self,
-        k=1.0,
-        r_max=None,
-        z_min=None,
-        z_max=None,
-    ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
-
-        coords = shared_config["initial_conformation"]
-
-        if (action_config["z_min"] is None) != (action_config["z_max"] is None):
-            raise ValueError(
-                "Both z_min and z_max have to be either specified or left as None."
-            )
-        coords = shared_config["initial_conformation"]
-        if action_config["z_min"] is None:
-            action_config["z_min"] = coords[:, 2].min()
-        elif action_config["z_min"] == "bb":
-            action_config["z_min"] = coords[shared_config["backbone"]][:, 2].min()
-        else:
-            action_config["z_min"] = action_config["z_min"]
-
-        if action_config["z_max"] is None:
-            action_config["z_max"] = coords[:, 2].max()
-        elif action_config["z_max"] == "bb":
-            action_config["z_max"] = coords[shared_config["backbone"]][:, 2].max()
-        else:
-            action_config["z_max"] = action_config["z_max"]
-
-        action_config["r_max"] = ((coords[:, :2] ** 2).sum(axis=1) ** 0.5).max()
-
-        return shared_config_added_data, action_config
-
-    def run_init(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-
-        sim.add_force(
-            extra_forces.cylindrical_confinement_2(
-                sim_object=sim,
-                r=self_conf["r_max"],
-                top=self_conf["z_max"],
-                bottom=self_conf["z_min"],
-                k=self_conf["k"],
-            )
-        )
-
-
-class AddDynamicCylinderCompression(SimAction):
-    def __init__(
-        self,
-        final_per_particle_volume=1.5 * 1.5 * 1.5,
-        final_axial_compression=1,
-        powerlaw=2.0,
-        initial_block=1,
-        final_block=100,
-    ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
-
-        init_bottom = action_configs["AddInitConfCylindricalConfinement"]["z_min"]
-        init_top = action_configs["AddInitConfCylindricalConfinement"]["z_max"]
-        init_mid = (init_top + init_bottom) / 2
-        init_height = init_top - init_bottom
-
-        final_top = (
-            init_mid + init_height / 2 / action_config["final_axial_compression"]
-        )
-        final_bottom = (
-            init_mid - init_height / 2 / action_config["final_axial_compression"]
-        )
-
-        final_r = np.sqrt(
-            shared_config["N"]
-            * action_config["final_per_particle_volume"]
-            / (final_top - final_bottom)
-            / np.pi
-        )
-
-        action_config["final_r"] = final_r
-        action_config["final_top"] = final_top
-        action_config["final_bottom"] = final_bottom
-
-        return shared_config_added_data, action_config
-
-    def run_loop(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-
-        if self_conf["initial_block"] <= sim.block <= self_conf["final_block"]:
-            ks = [
-                k for k in ["r", "top", "bottom"] if self_conf[f"final_{k}"] is not None
-            ]
-
-            cur_vals = {
-                k: sim.context.getParameter(f"cylindrical_confinement_{k}") for k in ks
-            }
-
-            new_vals = {
-                k: cur_vals[k]
-                + (
-                    (cur_vals[k] - self_conf[f"final_{k}"])
-                    * (
-                        (
-                            (self_conf["final_block"] + 1 - sim.block - 1)
-                            ** self_conf["powerlaw"]
-                        )
-                        / (
-                            (self_conf["final_block"] + 1 - sim.block)
-                            ** self_conf["powerlaw"]
-                        )
-                        - 1
-                    )
-                )
-                for k in ks
-            }
-
-            for k in ks:
-                sim.context.setParameter(
-                    f"cylindrical_confinement_{k}", new_vals[k] * sim.conlen
-                )
-
-            if "AddTipsTethering" in action_configs:
-                if "top" in ks and "bottom" in ks:
-                    sim.force_dict["Tethers"].setParticleParameters(
-                        0, 0, [0, 0, new_vals["bottom"]]
-                    )
-                    sim.force_dict["Tethers"].setParticleParameters(
-                        1, sim.N - 1, [0, 0, new_vals["top"]]
-                    )
-                    sim.force_dict["Tethers"].updateParametersInContext(sim.context)
-
-
-class AddTwoStepDynamicCylinderCompression(SimAction):
-    def __init__(
-        self,
-        final_per_particle_volume=1.5 * 1.5 * 1.5,
-        final_axial_compression=1,
-        powerlaw=2.0,
-        step1_start=1,
-        step1_end=100,
-        step2_start=100,
-        step2_end=200,
-    ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
-
-        init_bottom = action_configs["AddInitConfCylindricalConfinement"]["z_min"]
-        init_top = action_configs["AddInitConfCylindricalConfinement"]["z_max"]
-        init_mid = (init_top + init_bottom) / 2
-        init_height = init_top - init_bottom
-
-        step1_top = init_top
-        step1_bottom = init_bottom
-        step1_r = np.sqrt(
-            shared_config["N"]
-            * action_config["final_per_particle_volume"]
-            / (step1_top - step1_bottom)
-            / np.pi
-        )
-
-        step2_top = (
-            init_mid + init_height / 2 / action_config["final_axial_compression"]
-        )
-        step2_bottom = (
-            init_mid - init_height / 2 / action_config["final_axial_compression"]
-        )
-        step2_r = np.sqrt(
-            shared_config["N"]
-            * action_config["final_per_particle_volume"]
-            / (step2_top - step2_bottom)
-            / np.pi
-        )
-
-        action_config["step1_r"] = step1_r
-        action_config["step1_top"] = step1_top
-        action_config["step1_bottom"] = step1_bottom
-
-        action_config["step2_r"] = step2_r
-        action_config["step2_top"] = step2_top
-        action_config["step2_bottom"] = step2_bottom
-
-        return shared_config_added_data, action_config
-
-    def run_loop(self, shared_config, action_configs, sim):
-        # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
-
-        if (self_conf["step1_start"] <= sim.block <= self_conf["step1_end"]) or (
-            self_conf["step2_start"] <= sim.block <= self_conf["step2_end"]
-        ):
-            step = (
-                "step1"
-                if (self_conf["step1_start"] <= sim.block <= self_conf["step1_end"])
-                else "step2"
-            )
-            ks = [
-                k
-                for k in ["r", "top", "bottom"]
-                if self_conf[f"{step}_{k}"] is not None
-            ]
-
-            cur_vals = {
-                k: sim.context.getParameter(f"cylindrical_confinement_{k}") for k in ks
-            }
-
-            new_vals = {
-                k: cur_vals[k]
-                + (
-                    (cur_vals[k] - self_conf[f"{step}_{k}"])
-                    * (
-                        (
-                            (self_conf[f"{step}_end"] + 1 - sim.block - 1)
-                            ** self_conf["powerlaw"]
-                        )
-                        / (
-                            (self_conf[f"{step}_end"] + 1 - sim.block)
-                            ** self_conf["powerlaw"]
-                        )
-                        - 1
-                    )
-                )
-                for k in ks
-            }
-
-            for k in ks:
-                sim.context.setParameter(
-                    f"cylindrical_confinement_{k}", new_vals[k] * sim.conlen
-                )
-
-            if "AddTipsTethering" in action_configs:
-                if "top" in ks and "bottom" in ks:
-                    sim.force_dict["Tethers"].setParticleParameters(
-                        0, 0, [0, 0, new_vals["bottom"]]
-                    )
-                    sim.force_dict["Tethers"].setParticleParameters(
-                        1, sim.N - 1, [0, 0, new_vals["top"]]
-                    )
-                    sim.force_dict["Tethers"].updateParametersInContext(sim.context)
 
 
 class AddStaticCylinderCompression(SimAction):
     def __init__(
         self, k=1.0, z_min=None, z_max=None, r=None, per_particle_volume=1.5 * 1.5 * 1.5
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         if (action_config["z_min"] is None) != (action_config["z_max"] is None):
             raise ValueError(
                 "Both z_min and z_max have to be either specified or left as None."
             )
-        coords = shared_config["initial_conformation"]
+
+        coords = config.shared["initial_conformation"]
+        
         if action_config["z_min"] is None:
             action_config["z_min"] = coords[:, 2].min()
         elif action_config["z_min"] == "bb":
-            action_config["z_min"] = coords[shared_config["backbone"]][:, 2].min()
+            action_config["z_min"] = coords[config.shared["backbone"]][:, 2].min()
         else:
             action_config["z_min"] = action_config["z_min"]
 
         if action_config["z_max"] is None:
             action_config["z_max"] = coords[:, 2].max()
         elif action_config["z_max"] == "bb":
-            action_config["z_max"] = coords[shared_config["backbone"]][:, 2].max()
+            action_config["z_max"] = coords[config.shared["backbone"]][:, 2].max()
         else:
             action_config["z_max"] = action_config["z_max"]
 
@@ -730,32 +417,31 @@ class AddStaticCylinderCompression(SimAction):
         elif (action_config["r"] is None) and (
             action_config["per_particle_volume"] is None
         ):
-            coords = shared_config["initial_conformation"]
+            coords = config.shared["initial_conformation"]
             action_config["r"] = ((coords[:, :2] ** 2).sum(axis=1) ** 0.5).max()
         elif (action_config["r"] is None) and (
             action_config["per_particle_volume"] is not None
         ):
             action_config["r"] = np.sqrt(
-                shared_config["N"]
+                config.shared["N"]
                 * action_config["per_particle_volume"]
                 / (action_config["z_max"] - action_config["z_min"])
                 / np.pi
             )
 
-        return shared_config_added_data, action_config
+        return newconf
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
             extra_forces.cylindrical_confinement_2(
                 sim_object=sim,
-                r=self_conf["r"],
-                top=self_conf["z_max"],
-                bottom=self_conf["z_min"],
-                k=self_conf["k"],
+                r=config.action["r"],
+                top=config.action["z_max"],
+                bottom=config.action["z_min"],
+                k=config.action["k"],
             )
         )
 
@@ -769,15 +455,11 @@ class GenerateLoopBrushInitialConformation(SimAction):
         axial_compression_factor=None,
         random_loop_orientations=True,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         n_params = sum(
             [
@@ -889,17 +571,17 @@ class GenerateLoopBrushInitialConformation(SimAction):
         action_config["helix_step"] = helix_step
         action_config["helix_radius"] = helix_radius
 
-        shared_config_added_data[
+        newconf.shared[
             "initial_conformation"
         ] = starting_mitotic_conformations.make_helical_loopbrush(
-            L=shared_config["N"],
+            L=config.shared["N"],
             helix_radius=helix_radius,
             helix_step=helix_step,
-            loops=shared_config["loops"],
+            loops=config.shared["loops"],
             random_loop_orientations=action_config["random_loop_orientations"],
         )
 
-        return shared_config_added_data, action_config
+        return newconf
 
 
 class GenerateLoopBrushUniformHelixInitialConformation(SimAction):
@@ -913,15 +595,11 @@ class GenerateLoopBrushUniformHelixInitialConformation(SimAction):
         loop_layer="all",
         chain_bond_length=1.0,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         n_params = sum(
             [
@@ -972,65 +650,21 @@ class GenerateLoopBrushUniformHelixInitialConformation(SimAction):
         action_config["helix_step"] = helix_step
         action_config["helix_radius"] = helix_radius
 
-        shared_config_added_data[
+        newconf.shared[
             "initial_conformation"
         ] = starting_mitotic_conformations.make_uniform_helical_loopbrush(
-            L=shared_config["N"],
+            L=config.shared["N"],
             helix_radius=helix_radius,
             helix_step=helix_step,
             period_particles=action_config["period_particles"],
-            loops=shared_config["loops"],
+            loops=config.shared["loops"],
             chain_bond_length=action_config["chain_bond_length"],
             loop_fold=action_config["loop_fold"],
         )
 
-        return shared_config_added_data, action_config
+        return newconf
 
 
-class SaveConfiguration(SimAction):
-    def __init__(
-        self,
-        backup=True,
-        mode_exists="fail",  # 'exit' 'overwrite'
-    ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
-
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
-
-        if action_config["mode_exists"] not in ["fail", "exit", "overwrite"]:
-            raise ValueError(
-                f'Unknown mode for saving configuration: {action_config["mode_exists"]}'
-            )
-        if os.path.exists(shared_config["folder"]):
-            if action_config["mode_exists"] == "fail":
-                raise OSError(
-                    f'The output folder already exists {shared_config["folder"]}'
-                )
-            elif action_config["mode_exists"] == "exit":
-                sys.exit(0)
-
-        os.makedirs(shared_config["folder"], exist_ok=True)
-        paths = [os.path.join(shared_config["folder"], "conf.shlv")]
-
-        if action_config["backup"]:
-            os.mkdir(shared_config["folder"] + "/backup/")
-            paths.append(os.path.join(shared_config["folder"], "backup", "conf.shlv"))
-
-        for path in paths:
-            conf = shelve.open(path, protocol=2)
-            # TODO: fix saving action_params
-            # conf['params'] = {k:dict(v) for k,v in ..}
-            conf["shared_config"] = shared_config
-            conf["action_configs"] = {k: dict(v) for k, v in action_configs.items()}
-            conf.close()
-
-        return shared_config_added_data, action_config
 
 
 class AddChainsSelectiveRepAttr(SimAction):
@@ -1047,61 +681,56 @@ class AddChainsSelectiveRepAttr(SimAction):
         particle_types=None,
         except_bonds=False,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
-        super().__init__(**params)
+        
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         if hasattr(action_config["chains"], "__iter__") and hasattr(
             action_config["chains"][0], "__iter__"
         ):
-            shared_config_added_data["chains"] = action_config["chains"]
+            newconf.shared["chains"] = action_config["chains"]
         elif hasattr(action_config["chains"], "__iter__") and isinstance(
             action_config["chains"][0], numbers.Number
         ):
             edges = np.r_[0, np.cumsum(action_config["chains"])]
             chains = [(st, end, False) for st, end in zip(edges[:-1], edges[1:])]
             action_config["chains"] = chains
-            shared_config_added_data["chains"] = chains
+            newconf.shared["chains"] = chains
 
-        return shared_config_added_data, action_config
+        return newconf
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         nonbonded_force_func = extra_forces.homotypic_quartic_repulsive_attractive
         nonbonded_force_kwargs = dict(
-            repulsionEnergy=self_conf["repulsion_e"],
+            repulsionEnergy=config.action["repulsion_e"],
             repulsionRadius=1.0,
-            attractionEnergy=self_conf["attraction_e"],
-            attractionRadius=self_conf["attraction_r"],
-            particleTypes=self_conf["particle_types"],
-            selectiveAttractionEnergy=self_conf["selective_attraction_e"],
+            attractionEnergy=config.action["attraction_e"],
+            attractionRadius=config.action["attraction_r"],
+            particleTypes=config.action["particle_types"],
+            selectiveAttractionEnergy=config.action["selective_attraction_e"],
         )
 
         sim.add_force(
             forcekits.polymer_chains(
                 sim,
-                chains=shared_config["chains"],
+                chains=config.shared["chains"],
                 bond_force_func=forces.harmonic_bonds,
                 bond_force_kwargs={
-                    "bondLength": self_conf["bond_length"],
-                    "bondWiggleDistance": self_conf["wiggle_dist"],
+                    "bondLength": config.action["bond_length"],
+                    "bondWiggleDistance": config.action["wiggle_dist"],
                 },
                 angle_force_func=(
-                    None if self_conf["stiffness_k"] is None else forces.angle_force
+                    None if config.action["stiffness_k"] is None else forces.angle_force
                 ),
-                angle_force_kwargs={"k": self_conf["stiffness_k"]},
+                angle_force_kwargs={"k": config.action["stiffness_k"]},
                 nonbonded_force_func=nonbonded_force_func,
                 nonbonded_force_kwargs=nonbonded_force_kwargs,
-                except_bonds=self_conf["except_bonds"],
+                except_bonds=config.action["except_bonds"],
             )
         )
 
@@ -1119,21 +748,17 @@ class AddChainsHeteropolymerRepAttr(SimAction):
         particle_types=None,
         except_bonds=False,
     ):
-        params = {
-            k: v for k, v in locals().items() if k not in ["self"]
-        }  # This line must be the first in the function.
+        
         params["chains"] = np.array(chains, dtype=np.object)
-        super().__init__(**params)
+        super().__init__(**locals())
 
-    def configure(self, shared_config, action_configs):
-        shared_config_added_data, action_config = super().configure(
-            shared_config, action_configs
-        )
+    def configure(self, config: ConfigEntry):
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
 
         if hasattr(action_config["chains"], "__iter__") and hasattr(
             action_config["chains"][0], "__iter__"
         ):
-            shared_config_added_data["chains"] = action_config["chains"]
+            newconf.shared["chains"] = action_config["chains"]
         elif hasattr(action_config["chains"], "__iter__") and isinstance(
             action_config["chains"][0], numbers.Number
         ):
@@ -1143,43 +768,42 @@ class AddChainsHeteropolymerRepAttr(SimAction):
                 dtype=np.object,
             )
             action_config["chains"] = chains
-            shared_config_added_data["chains"] = chains
+            newconf.shared["chains"] = chains
 
-        return shared_config_added_data, action_config
+        return newconf
 
-    def run_init(self, shared_config, action_configs, sim):
+    def run_init(self, config: ConfigEntry, sim):
         # do not use self.params!
-        # only use parameters from action_configs[self.name] and shared_config
-        self_conf = action_configs[self.name]
+        # only use parameters from action_configs[self.name] and config.shared
 
         nonbonded_force_func = extra_forces.heteropolymer_quartic_repulsive_attractive
         nonbonded_force_kwargs = dict(
-            repulsionEnergy=self_conf["repulsion_e"],
+            repulsionEnergy=config.action["repulsion_e"],
             repulsionRadius=1.0,
-            attractionEnergies=self_conf["attraction_e"],
-            attractionRadius=self_conf["attraction_r"],
+            attractionEnergies=config.action["attraction_e"],
+            attractionRadius=config.action["attraction_r"],
             particleTypes=(
-                shared_config["particle_types"]
-                if self_conf["particle_types"] is None
-                else self_conf["particle_types"]
+                config.shared["particle_types"]
+                if config.action["particle_types"] is None
+                else config.action["particle_types"]
             ),
         )
 
         sim.add_force(
             forcekits.polymer_chains(
                 sim,
-                chains=shared_config["chains"],
+                chains=config.shared["chains"],
                 bond_force_func=forces.harmonic_bonds,
                 bond_force_kwargs={
-                    "bondLength": self_conf["bond_length"],
-                    "bondWiggleDistance": self_conf["wiggle_dist"],
+                    "bondLength": config.action["bond_length"],
+                    "bondWiggleDistance": config.action["wiggle_dist"],
                 },
                 angle_force_func=(
-                    None if self_conf["stiffness_k"] is None else forces.angle_force
+                    None if config.action["stiffness_k"] is None else forces.angle_force
                 ),
-                angle_force_kwargs={"k": self_conf["stiffness_k"]},
+                angle_force_kwargs={"k": config.action["stiffness_k"]},
                 nonbonded_force_func=nonbonded_force_func,
                 nonbonded_force_kwargs=nonbonded_force_kwargs,
-                except_bonds=self_conf["except_bonds"],
+                except_bonds=config.action["except_bonds"],
             )
         )
