@@ -105,3 +105,4 @@ venv.bak/
 
 data/*
 examples/data/*
+.vscode/settings.json

@@ -140,26 +140,13 @@ class AddDynamicParameterUpdate(SimAction):
             sim.context.setParameter(param_full_name, new_val)
 
 
-## move to methods of the SimulationConstructor
-
-
-# class SaveConformationTxt(SimAction):
-
-#     def run_loop(self, config:ConfigEntry, sim):
-#         # do not use self.params!
-#         # only use parameters from config.action and config.shared
-#      
-#         path = os.path.join(config.shared['folder'], f'block.{sim.block}.txt.gz')
-#         data = sim.get_data()
-#         np.savetxt(path, data)
-
-#         return sim
+# move to methods of the SimulationConstructor
 
 
 # DEPRECATED in favor of AddDynamicParameterUpdate
 # class AddGlobalVariableDynamics(SimAction):
 #     def __init__(
-#         self, 
+#         self,
 #         variable_name=None,
 #         final_value=None,
 #         inital_block=0,
@@ -173,7 +160,6 @@ class AddDynamicParameterUpdate(SimAction):
 #     def run_loop(self, config:ConfigEntry, sim):
 #         # do not use self.params!
 #         # only use parameters from config.action and config.shared
-#      
 
 #         if config.action["inital_block"] <= sim.block <= config.action["final_block"]:
 #             cur_val = sim.context.getParameter(config.action["variable_name"])
@@ -185,5 +171,3 @@ class AddDynamicParameterUpdate(SimAction):
 
 #             logging.info(f'set {config.action["variable_name"]} to {new_val}')
 #             sim.context.setParameter(config.action["variable_name"], new_val)
-
-

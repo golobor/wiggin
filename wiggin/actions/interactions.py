@@ -1,17 +1,15 @@
-import numbers
-
-from typing import Optional, Any, Union
-import dataclasses
 from dataclasses import dataclass
+import numbers
 
 import numpy as np
 
-from ..core import SimAction
-from .. import extra_forces
+from typing import Optional, Any, Union
 
 import polychrom
-import polychrom.forces
-import polychrom.forcekits
+
+from ..core import SimAction
+
+from .. import forces
 
 
 @dataclass
@@ -50,7 +48,7 @@ class AddChains(SimAction):
         nonbonded_force_kwargs = {}
         if self.repulsion_e:
             if self.attraction_e and self.attraction_r:
-                nonbonded_force_func = extra_forces.quartic_repulsive_attractive
+                nonbonded_force_func = forces.quartic_repulsive_attractive
                 nonbonded_force_kwargs = dict(
                     repulsionEnergy=self.repulsion_e,
                     repulsionRadius=1.0,
@@ -59,7 +57,7 @@ class AddChains(SimAction):
                 )
 
             else:
-                nonbonded_force_func = extra_forces.quartic_repulsive
+                nonbonded_force_func = forces.quartic_repulsive
                 nonbonded_force_kwargs = {"trunc": self.repulsion_e}
 
         sim.add_force(
@@ -78,67 +76,5 @@ class AddChains(SimAction):
                 nonbonded_force_func=nonbonded_force_func,
                 nonbonded_force_kwargs=nonbonded_force_kwargs,
                 except_bonds=self.except_bonds,
-            )
-        )
-
-
-@dataclass
-class AddCylindricalConfinement(SimAction):
-    k: float = 0.5
-    r: Optional[float] = None
-    top: Optional[float] = None
-    bottom: Optional[float] = None
-
-    def run_init(self, sim):
-        # do not use self.args!
-        # only use parameters from self.ndonfig.shared
-        sim.add_force(
-            polychrom.forces.cylindrical_confinement(
-                sim_object=sim,
-                r=self.r,
-                top=self.top,
-                bottom=self.bottom,
-                k=self.k,
-            )
-        )
-
-
-@dataclass
-class AddSphericalConfinement(SimAction):
-    k: float = 5
-    r: Optional[Union[str, float]] = "density"
-    density: Optional[float] = 1.0 / ((1.5) ** 3)
-
-    def run_init(self, sim):
-        # do not use self.args!
-        # only use parameters from self.ndonfig.shared
-
-        sim.add_force(
-            polychrom.forces.spherical_confinement(
-                sim,
-                r=self.r,  # radius... by default uses certain density
-                k=self.k,  # How steep the walls are
-                density=self.density,  # target density, measured in particles
-                # per cubic nanometer (bond size is 1 nm)
-                # name='spherical_confinement'
-            )
-        )
-
-
-@dataclass
-class AddTethering(SimAction):
-    k: float = 15
-    particles: Any = dataclasses.field(default_factory=lambda: [])
-    positions: Any = "current"
-
-    def run_init(self, sim):
-        # do not use self.args!
-        # only use parameters from self.ndonfig.shared
-        sim.add_force(
-            polychrom.forces.tether_particles(
-                sim_object=sim,
-                particles=self.particles,
-                k=self.k,
-                positions=self.positions,
             )
         )
