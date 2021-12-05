@@ -1,7 +1,8 @@
 import copy
+import dataclasses
 import os
 import logging
-import inspect
+import shelve
 # import typing
 
 from dataclasses import dataclass, field
@@ -15,15 +16,25 @@ _VERBOSE = True
 logging.basicConfig(level=logging.INFO)
 
 
-@dataclass
-class ConfigEntry:
-    shared: dict
-    action: dict
+def _get_dataclass_defaults(dc):
+    if not dataclasses.is_dataclass(dc):
+        raise ValueError('`dc` must be a dataclass!')
+    elif not isinstance(dc.__class__, type):
+        dc = dc.__class__
+    out = {}
+    for k,v in dc.__dataclass_fields__.items():
+        if not isinstance(v.default, dataclasses._MISSING_TYPE):
+            out[k] = v.default
+        elif not isinstance(v.default_factory, dataclasses._MISSING_TYPE):
+            out[k] = v.default_factory()
+    return out
 
 
 @dataclass
 class SimAction:
     name: int = field(init=False)
+
+    _shared = dict()
 
     def __post_init__(self):
         self.name = type(self).__name__
@@ -32,32 +43,25 @@ class SimAction:
         self.name = new_name
         return self
 
-    def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=self.asdict())
-
-        return newconf
+    def configure(self):
+        out_shared = {}
+        return out_shared
 
     def spawn_actions(self):
         pass
+    
+    # def run_init(self, sim):
+    #     pass
 
-    # def __init__(self):
-    # This line must be the first in the function:
-    #     super().__init__(**locals())
-
-    # def run_init(self, config:ConfigEntry, sim):
-    #     # do not use self.params!
-    #     # only use parameters from config.action and config.shared
-
-    # def run_loop(self, config:ConfigEntry, sim):
-    #     # do not use self.params!
-    #     # only use parameters from config.action and config.shared
-
+    # def run_loop(self, sim):
+    #     pass
 
 class SimConstructor:
     def __init__(self, name=None, folder=None):
         self._actions = []
 
         self._sim = None
+
         self.config = {}
         self.config['shared'] = dict(
             name=name,
@@ -67,8 +71,8 @@ class SimConstructor:
         )
         self.config['actions'] = dict()
 
-        self.action_params = dict()
-        self._default_action_params = dict()
+        self.action_args = dict()
+        self._default_action_args = dict()
 
     def add_action(self, action: SimAction, order=(None, None, None)):
         """
@@ -84,18 +88,15 @@ class SimConstructor:
                 Use at your peril!
 
         """
-        if action.name in self.action_params:
+        if action.name in self.action_args:
             raise ValueError(
                 f"Action {action.name} was already added to the constructor!"
             )
 
-        self.action_params[action.name] = copy.deepcopy(action.params)
+        self.action_args[action.name] = copy.deepcopy(action.__dict__)
 
-        self._default_action_params[action.name] = {
-            k: v.default
-            for k, v in inspect.signature(action.__init__).parameters.items()
-            if v.default is not inspect.Parameter.empty
-        }
+        self._default_action_args[action.name] = _get_dataclass_defaults(
+            action.__class__)
 
         if len(order) != 3:
             raise ValueError("order must be a tuple of three numbers or Nones")
@@ -104,33 +105,35 @@ class SimConstructor:
 
         self._actions.append((order, action))
 
-    def configure(self) -> ConfigEntry:
+    def configure(self):
         # sorted uses a stable sorting algorithm
         for order, action in sorted(self._actions, key=lambda x: x[0][0]):
             if _VERBOSE:
                 logging.info(f"Configuring action {action.name}...")
 
-            if action.name in self.newconf.actions:
+            if action.name in self.config['actions']:
                 raise ValueError(f"Action {action.name} has already been configured!")
 
-            newconf = action.configure(self.config.shared, self.newconf.actions)
+            # populate the dictionary of shared parameters of the action.
+            action._shared = {k:self.config['shared'][k] for k in action._shared}
 
-            assert (
-                newconf is not None
-            ), f"{action.name}.configure() a ConfigEntry !"
-            self.config['shared'].update(newconf.shared)
-            self.config['actions'][action.name] = newconf.action
+            out_shared = action.configure()
 
+            if isinstance(out_shared, dict): 
+                self.config['shared'].update(out_shared)
+            
+            self.config['actions'][action.name] = {
+                k:copy.deepcopy(v) 
+                for k,v in action.__dict__.items()
+                if k not in ['_shared']
+            }
+            
     def _run_action(self, action: SimAction, stage: str = 'init'):
         run_f_name = f'run_{stage}'
         if not hasattr(action, run_f_name):
             return True
 
-        out = getattr(action, run_f_name)(
-            ConfigEntry(shared=self.config['shared'],
-                        action=self.newconf['actions'][action.name]),
-            self._sim
-        )
+        out = getattr(action, run_f_name)(self._sim)
 
         if issubclass(type(out), polychrom.simulation.Simulation):
             self._sim = out
@@ -145,24 +148,53 @@ class SimConstructor:
                 "Allowed values are: polychrom.simulation.Simulation, None or False"
             )
 
+
     def run(self):
         for order, action in sorted(self._actions, key=lambda x: x[0][1]):
             self._run_action(action, stage='init')
                 
         while True:
             for order, action in sorted(self._actions, key=lambda x: x[0][2]):
-                self._run_action(action, stage='init')
+                self._run_action(action, stage='loop')
+
 
     def auto_name(self, root_data_folder="./data/"):
         name = []
-        for action_name, params in self.action_params.items():
-            default_params = self._default_action_params.get(action_name, {})
-            for k, v in params.items():
-                if k in default_params and v != default_params[k]:
+        for action_name, args in self.action_args.items():
+            default_args = self._default_action_args.get(action_name, {})
+            for k, v in args.items():
+                if k in default_args and v != default_args[k]:
                     name += ["_", k, "-", str(v)]
 
         name = "".join(name[1:])
-        self.config.shared["name"] = name
-        self.config.shared["folder"] = os.path.join(root_data_folder, name)
+        self.config['shared']['name'] = name
+        self.config['shared']['folder'] = os.path.join(root_data_folder, name)
 
 
+    def save_config(self, backup=True, mode_exists='fail'):
+        folder = self.config['shared']['folder']
+        if mode_exists not in ["fail", "overwrite"]:
+            raise ValueError(
+                f'Unknown mode for saving configuration: {mode_exists}'
+            )
+
+        if os.path.exists(folder):
+            if (self.mode_exists == "fail"):
+                raise OSError(
+                    f'The output folder already exists {folder}'
+                )
+            else:
+                logging.info(f'removing previously existing config files in {folder}')
+
+        os.makedirs(folder, exist_ok=True)
+        paths = [os.path.join(folder, "conf.shlv")]
+
+        if backup:
+            os.mkdir(os.path.join(folder, "backup"))
+            paths.append(os.path.join(folder, "backup", "conf.shlv"))
+
+        for path in paths:
+            with shelve.open(path, protocol=2) as conf:
+                conf.clear()
+                conf['config'] = self.config
+                conf['action_args'] = self.action_args

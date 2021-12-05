@@ -13,7 +13,7 @@ class AddInitConfCylindricalConfinement(SimAction):
         super().__init__(**locals())
 
     def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.args))
 
         coords = config.shared["initial_conformation"]
 
@@ -41,7 +41,7 @@ class AddInitConfCylindricalConfinement(SimAction):
         return newconf
 
     def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
+        # do not use self.args!
         # only use parameters from action_configs[self.name] and config.shared
 
         sim.add_force(
@@ -68,7 +68,7 @@ class AddDynamicCylinderCompression(SimAction):
         super().__init__(**locals())
 
     def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.args))
 
         init_bottom = action_configs["AddInitConfCylindricalConfinement"]["z_min"]
         init_top = action_configs["AddInitConfCylindricalConfinement"]["z_max"]
@@ -97,7 +97,7 @@ class AddDynamicCylinderCompression(SimAction):
         return newconf
 
     def run_loop(self, config:ConfigEntry, sim):
-        # do not use self.params!
+        # do not use self.args!
         # only use parameters from action_configs[self.name] and config.shared
 
         if config.action["initial_block"] <= sim.block <= config.action["final_block"]:
@@ -159,7 +159,7 @@ class AddTwoStepDynamicCylinderCompression(SimAction):
         super().__init__(**locals())
 
     def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.params))
+        newconf = ConfigEntry(shared={}, action=copy.deepcopy(self.args))
 
         init_bottom = action_configs["AddInitConfCylindricalConfinement"]["z_min"]
         init_top = action_configs["AddInitConfCylindricalConfinement"]["z_max"]
@@ -199,7 +199,7 @@ class AddTwoStepDynamicCylinderCompression(SimAction):
         return newconf
 
     def run_loop(self, config:ConfigEntry, sim):
-        # do not use self.params!
+        # do not use self.args!
         # only use parameters from action_configs[self.name] and config.shared
 
         if (config.action["step1_start"] <= sim.block <= config.action["step1_end"]) or (

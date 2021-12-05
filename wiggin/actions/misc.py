@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from typing import Any
-from ..core import SimAction, ConfigEntry
+from ..core import SimAction
 
 import polychrom
 import polychrom.forces
@@ -13,25 +13,25 @@ class CrosslinkParallelChains(SimAction):
     bond_length: float = 1.0
     wiggle_dist: float = 0.025
 
-    def configure(self, config: ConfigEntry):
-        newconf = ConfigEntry(shared={}, action=self.asdict())
+    _shared = dict(N=None)
 
-        if newconf.action["chains"] is None:
-            newconf.action["chains"] = [
+    def configure(self):
+        if self.chains is None:
+            self.chains = [
                 (
-                    (0, newconf.shared["N"] // 2, 1),
+                    (0, self._shared["N"] // 2, 1),
                     (
-                        newconf.shared["N"] // 2,
-                        newconf.shared["N"],
+                        self._shared["N"] // 2,
+                        self._shared["N"],
                         1,
                     ),
                 ),
             ]
 
-        return newconf
+        return {}
 
-    def run_init(self, config: ConfigEntry, sim):
-        # do not use self.params!
+    def run_init(self, sim):
+        # do not use self.args!
         # only use parameters from config.action and config.shared
 
         bonds = sum(
@@ -40,7 +40,7 @@ class CrosslinkParallelChains(SimAction):
                     range(chain1[0], chain1[1], chain1[2]),
                     range(chain2[0], chain2[1], chain2[2]),
                 )
-                for chain1, chain2 in config.action["chains"]
+                for chain1, chain2 in self.chains
             ]
         )
 
@@ -48,8 +48,8 @@ class CrosslinkParallelChains(SimAction):
             polychrom.forces.harmonic_bonds(
                 sim,
                 bonds=bonds,
-                bondLength=config.action["bond_length"],
-                bondWiggleDistance=config.action["wiggle_dist"],
+                bondLength=self.bond_length,
+                bondWiggleDistance=self.wiggle_dist,
                 name="ParallelChainsCrosslinkBonds",
             )
         )
