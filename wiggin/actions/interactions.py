@@ -23,6 +23,8 @@ class AddChains(SimAction):
     attraction_r: Optional[float] = None
     except_bonds: Union[bool, int] = False
 
+    _writes_shared = ['chains']
+
     def configure(self):
         out_shared = {}
 

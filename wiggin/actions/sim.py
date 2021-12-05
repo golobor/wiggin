@@ -33,7 +33,8 @@ class InitializeSimulation(SimAction):
     reporter_block_size: int = 10
     reporter_blocks_only: bool = False
 
-    _shared = dict(folder=None)
+    _reads_shared = ['folder']
+    _writes_shared = ['N']
 
     def configure(self):
         out_shared = {}

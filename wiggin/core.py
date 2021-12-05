@@ -34,10 +34,16 @@ def _get_dataclass_defaults(dc):
 class SimAction:
     name: int = field(init=False)
 
+    _reads_shared = []
+    _writes_shared = []
     _shared = dict()
 
     def __post_init__(self):
         self.name = type(self).__name__
+
+    def store_shared(self, shared_config):
+        for k in self._reads_shared:
+            self._shared[k] = shared_config[k]
 
     def set_name(self, new_name):
         self.name = new_name
@@ -115,11 +121,17 @@ class SimConstructor:
                 raise ValueError(f"Action {action.name} has already been configured!")
 
             # populate the dictionary of shared parameters of the action.
-            action._shared = {k:self.config['shared'][k] for k in action._shared}
+            action.store_shared(self.config['shared'])
 
             out_shared = action.configure()
 
-            if isinstance(out_shared, dict): 
+            if isinstance(out_shared, dict):
+                promised_keys = set(action._writes_shared)
+                provided_keys = set(out_shared.keys())
+                if promised_keys != provided_keys:
+                    raise RuntimeError(
+                        f'The action {type(action)} is expected to set shared keys '
+                        f'{promised_keys}, but instead provides {provided_keys}')
                 self.config['shared'].update(out_shared)
             
             self.config['actions'][action.name] = {

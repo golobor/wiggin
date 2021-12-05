@@ -8,7 +8,8 @@ import polychrom.starting_conformations
 
 @dataclass
 class GenerateRWInitialConformation(SimAction):
-    _shared = dict(N=None)
+    _reads_shared = ['N']
+    _writes_shared = ['initial_conformation']
 
     def configure(self):
         out_shared = {}
