@@ -14,11 +14,11 @@ from .. import forces
 
 @dataclass
 class Chains(SimAction):
-    chains: Any = ((0, None, 0),)
+    chains: Any = ((0, None, False),)
     bond_length: float = 1.0
-    wiggle_dist: float = 0.025
+    wiggle_dist: float = 0.25
     stiffness_k: Optional[float] = None
-    repulsion_e: Optional[float] = 2.5
+    repulsion_e: Optional[float] = 1.5
     attraction_e: Optional[float] = None
     attraction_r: Optional[float] = None
     except_bonds: Union[bool, int] = False
