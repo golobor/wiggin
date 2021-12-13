@@ -164,23 +164,23 @@ class SimConstructor:
             )
         
 
-    def _run_init(self):
+    def run_init(self):
         for order, action in sorted(self._actions, key=lambda x: x[0][1]):
             self._run_action(action, stage='init')
 
 
-    def _run_loop(self):
+    def run_loop(self):
         while True:
             for order, action in sorted(self._actions, key=lambda x: x[0][2]):
                 self._run_action(action, stage='loop')
 
 
     def run(self):
-        self._run_init()
-        self._run_loop()
+        self.run_init()
+        self.run_loop()
         
 
-    def auto_name(self, root_data_folder="./data/"):
+    def auto_name_folder(self, root_data_folder="./data/"):
         name = []
         for action_name, args in self.action_args.items():
             default_args = self._default_action_args.get(action_name, {})

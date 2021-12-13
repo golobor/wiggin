@@ -51,11 +51,17 @@ c.add_action(
     ),
 )
 
-c.auto_name(root_data_folder='./data/random_globule/')
-c.configure()
 
 pprint.pprint(c.action_args)
+
+c.auto_name_folder(root_data_folder='./data/random_globule/')
+
+c.configure()
+
 pprint.pprint(c.config)
 
 c.save_config()
-c.run()
+
+c.run_init()
+
+c.run_loop()
