@@ -78,6 +78,18 @@ class InitializeSimulation(SimAction):
 
 
 @dataclass
+class SetInitialConformation(SimAction):
+    _reads_shared = ['initial_conformation']
+
+    def run_init(self, sim):
+        # do not use self.params!
+        # only use parameters from config.action and config.shared
+        sim.set_data(self._shared["initial_conformation"])
+
+        return sim
+
+
+@dataclass
 class BlockStep(SimAction):
     num_blocks: int = 100
     block_size: int = int(1e4)
@@ -105,7 +117,7 @@ class LocalEnergyMinimization(SimAction):
 
 
 @dataclass
-class AddDynamicParameterUpdate(SimAction):
+class UpdateParameter(SimAction):
     force: str = ''
     param: str = ''
     ts: Sequence[float] = dataclasses.field(default_factory=lambda: [90, 100])

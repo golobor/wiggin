@@ -6,7 +6,8 @@ import pprint
 import wiggin
 import wiggin.core
 import wiggin.actions.sim
-import wiggin.actions.forces
+import wiggin.actions.interactions
+import wiggin.actions.constraints
 import wiggin.actions.conformations
 
 
@@ -23,19 +24,19 @@ c.add_action(
 )
 
 c.add_action(
-    wiggin.actions.forces.AddChains(
+    wiggin.actions.interactions.Chains(
         wiggle_dist=0.25,
         repulsion_e=1.5),
 )
 
 
 c.add_action(
-    wiggin.actions.conformations.GenerateRWInitialConformation()
+    wiggin.actions.conformations.RandomWalkConformation()
 )
 
 
 c.add_action(
-    wiggin.actions.forces.AddSphericalConfinement(
+    wiggin.actions.constraints.SphericalConfinement(
         density=1 / (2.0 ** 3)
     )
 )

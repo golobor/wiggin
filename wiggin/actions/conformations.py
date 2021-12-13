@@ -7,7 +7,7 @@ import polychrom.starting_conformations
 
 
 @dataclass
-class GenerateRWInitialConformation(SimAction):
+class RandomWalkConformation(SimAction):
     _reads_shared = ['N']
     _writes_shared = ['initial_conformation']
 

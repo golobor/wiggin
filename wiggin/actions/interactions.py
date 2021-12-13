@@ -13,7 +13,7 @@ from .. import forces
 
 
 @dataclass
-class AddChains(SimAction):
+class Chains(SimAction):
     chains: Any = ((0, None, 0),)
     bond_length: float = 1.0
     wiggle_dist: float = 0.025

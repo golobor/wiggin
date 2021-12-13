@@ -45,7 +45,7 @@ class SimAction:
         for k in self._reads_shared:
             self._shared[k] = shared_config[k]
 
-    def set_name(self, new_name):
+    def rename(self, new_name):
         self.name = new_name
         return self
 
@@ -111,6 +111,7 @@ class SimConstructor:
 
         self._actions.append((order, action))
 
+
     def configure(self):
         # sorted uses a stable sorting algorithm
         for order, action in sorted(self._actions, key=lambda x: x[0][0]):
@@ -133,13 +134,15 @@ class SimConstructor:
                         f'The action {type(action)} is expected to set shared keys '
                         f'{promised_keys}, but instead provides {provided_keys}')
                 self.config['shared'].update(out_shared)
+                action._shared.update(out_shared)
             
             self.config['actions'][action.name] = {
                 k:copy.deepcopy(v) 
                 for k,v in action.__dict__.items()
-                if k not in ['_shared']
+                if k not in ['_shared', 'name']
             }
             
+
     def _run_action(self, action: SimAction, stage: str = 'init'):
         run_f_name = f'run_{stage}'
         if not hasattr(action, run_f_name):
@@ -159,16 +162,23 @@ class SimConstructor:
                 f"{action.name}.run_{stage}() returned {out}. "
                 "Allowed values are: polychrom.simulation.Simulation, None or False"
             )
+        
 
-
-    def run(self):
+    def _run_init(self):
         for order, action in sorted(self._actions, key=lambda x: x[0][1]):
             self._run_action(action, stage='init')
-                
+
+
+    def _run_loop(self):
         while True:
             for order, action in sorted(self._actions, key=lambda x: x[0][2]):
                 self._run_action(action, stage='loop')
 
+
+    def run(self):
+        self._run_init()
+        self._run_loop()
+        
 
     def auto_name(self, root_data_folder="./data/"):
         name = []

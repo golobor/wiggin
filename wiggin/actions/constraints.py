@@ -11,7 +11,7 @@ import polychrom.forcekits
 
 
 @dataclass
-class AddCylindricalConfinement(SimAction):
+class CylindricalConfinement(SimAction):
     k: float = 0.5
     r: Optional[float] = None
     top: Optional[float] = None
@@ -32,7 +32,7 @@ class AddCylindricalConfinement(SimAction):
 
 
 @dataclass
-class AddSphericalConfinement(SimAction):
+class SphericalConfinement(SimAction):
     k: float = 5
     r: Optional[Union[str, float]] = "density"
     density: Optional[float] = 1.0 / ((1.5) ** 3)
@@ -54,7 +54,7 @@ class AddSphericalConfinement(SimAction):
 
 
 @dataclass
-class AddTethering(SimAction):
+class Tethering(SimAction):
     k: float = 15
     particles: Any = dataclasses.field(default_factory=lambda: [])
     positions: Any = "current"
