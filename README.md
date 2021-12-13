@@ -18,7 +18,7 @@ wiggin's key idea is that any simulation can be decomposed into as a series of a
 ## Q&A
 - **Should I use wiggin instead of polychrom?** The main goal of wiggin is not to replace polychrom, but rather to organize complex polychrom simulations and to enable combinatorial experimentation with such simulations. Thus, users of wiggin must already be familiar with polychrom. 
 
-- **How do I create a new action?**. An new action must define up to 5 elements:
+- **How do I create a new action?**. An new action must define up to 6 elements:
     1. Arguments. These are provided as a field of a `dataclass`<https://docs.python.org/3/library/dataclasses.html>.
     2. Entries of the shared config that will be read and written by the action.
     3. configure()
@@ -38,7 +38,7 @@ wiggin's key idea is that any simulation can be decomposed into as a series of a
 
 - **How can I enable interactions between my actions?** There are two way to create dependent actions: 
     - use shared config. Action can communicate by reading and writing entries of the shared config of their SimConstructor. Use this pattern when the resulting entries are generalizeable enough to potentially be used by other actions (i.e. chains, cis-loops, particle types, etc.)
-    - create meta-actions that spawn other actions. Each action can spawn dependent actions. Use this pattern for custom and complex interactions. 
+    - create meta-actions that spawn (and pass configured data into) dependent actions. Use this pattern for custom and complex interactions. 
 
 - **What is the preferred naming pattern for actions?** actions name can be either a verb (e.g. InitializeSimulation or UpdateParameter; this is the preferred pattern) or as a noun (named after the phenomenon it adds to the simulation, e.g. LocalEnergyMinimization or Chains).
 
