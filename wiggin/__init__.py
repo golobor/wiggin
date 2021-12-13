@@ -10,4 +10,7 @@ wiggin is an experimental high-level modular framework for building polymer simu
 :license: MIT
 
 """
+
 __version__ = '0.0.1-pre'
+
+from . import core, forces, actions  # noqa: F401

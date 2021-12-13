@@ -8,6 +8,7 @@ wiggin's key idea is that any simulation can be decomposed into as a series of a
 Each action must be  must be configured once, before running. After configuration, actions can be performed either once, when the simulation is initialized (at the "init" stage"), or, at every block of the simulation (the "loop" stage).
 
 
+
 ## Technical notes
 
 ### Execution order:

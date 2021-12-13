@@ -4,12 +4,6 @@
 import pprint
 
 import wiggin
-import wiggin.core
-import wiggin.actions.sim
-import wiggin.actions.interactions
-import wiggin.actions.constraints
-import wiggin.actions.conformations
-
 
 c = wiggin.core.SimConstructor()
 

@@ -201,7 +201,7 @@ class SimConstructor:
             )
 
         if os.path.exists(folder):
-            if (self.mode_exists == "fail"):
+            if (mode_exists == "fail"):
                 raise OSError(
                     f'The output folder already exists {folder}'
                 )
