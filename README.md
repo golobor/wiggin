@@ -19,11 +19,11 @@ wiggin's key idea is that any simulation can be decomposed into as a series of a
 - **Should I use wiggin instead of polychrom?** The main goal of wiggin is not to replace polychrom, but rather to organize complex polychrom simulations and to enable combinatorial experimentation with such simulations. Thus, in order to use wiggin, the user must be familiar with polychrom. 
 
 - **How do I create a new action?**. Each action has define up to 5 elements:
-    A. Arguments. These are provided as a field of a `dataclass`<https://docs.python.org/3/library/dataclasses.html>.
-    B. Entries of the shared config that will be read and written by the action.
-    C. configure()
-    D. run_init()
-    E. run_loop()
+    1. Arguments. These are provided as a field of a `dataclass`<https://docs.python.org/3/library/dataclasses.html>.
+    2. Entries of the shared config that will be read and written by the action.
+    3. configure()
+    4. run_init()
+    5. run_loop()
 
 - **In which order are actions configured and executed?** 
 
