@@ -112,36 +112,49 @@ class SimConstructor:
         self._actions.append((order, action))
 
 
+    def _configure_action(self, action):
+        if _VERBOSE:
+            logging.info(f"Configuring action {action.name}...")
+
+        if action.name in self.config['actions']:
+            raise ValueError(f"Action {action.name} has already been configured!")
+
+        # Populate the dictionary of shared parameters of the action.
+        action.store_shared(self.config['shared'])
+
+        # Update the shared config.
+        out_shared = action.configure()
+
+        if isinstance(out_shared, dict):
+            promised_keys = set(action._writes_shared)
+            provided_keys = set(out_shared.keys())
+            if promised_keys != provided_keys:
+                raise RuntimeError(
+                    f'The action {type(action)} is expected to set shared keys '
+                    f'{promised_keys}, but instead provides {provided_keys}')
+            self.config['shared'].update(out_shared)
+            action._shared.update(out_shared)
+        
+        # Store action configs.
+        self.config['actions'][action.name] = {
+            k:copy.deepcopy(v) 
+            for k,v in action.__dict__.items()
+            if k not in ['_shared', 'name']
+        }
+
+        # Recursively spawn and configure child actions:
+        spawned_actions = action.spawn_actions()
+        if spawned_actions:
+            for new_action in spawned_actions:
+                self.add_action(new_action)
+                self._configure_action(new_action)
+        
+
     def configure(self):
         # sorted uses a stable sorting algorithm
         for order, action in sorted(self._actions, key=lambda x: x[0][0]):
-            if _VERBOSE:
-                logging.info(f"Configuring action {action.name}...")
+            self.configure(action)
 
-            if action.name in self.config['actions']:
-                raise ValueError(f"Action {action.name} has already been configured!")
-
-            # populate the dictionary of shared parameters of the action.
-            action.store_shared(self.config['shared'])
-
-            out_shared = action.configure()
-
-            if isinstance(out_shared, dict):
-                promised_keys = set(action._writes_shared)
-                provided_keys = set(out_shared.keys())
-                if promised_keys != provided_keys:
-                    raise RuntimeError(
-                        f'The action {type(action)} is expected to set shared keys '
-                        f'{promised_keys}, but instead provides {provided_keys}')
-                self.config['shared'].update(out_shared)
-                action._shared.update(out_shared)
-            
-            self.config['actions'][action.name] = {
-                k:copy.deepcopy(v) 
-                for k,v in action.__dict__.items()
-                if k not in ['_shared', 'name']
-            }
-            
 
     def _run_action(self, action: SimAction, stage: str = 'init'):
         run_f_name = f'run_{stage}'
@@ -176,6 +189,7 @@ class SimConstructor:
 
 
     def run(self):
+        self.configure()
         self.run_init()
         self.run_loop()
         
