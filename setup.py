@@ -43,7 +43,6 @@ def get_long_description():
 
 install_requires = [
     'polychrom',
-    'looplib'
 ]
 
 
