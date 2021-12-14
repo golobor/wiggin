@@ -68,19 +68,18 @@ class SimConstructor:
 
         self._sim = None
 
-        self.config = {}
-        self.config['shared'] = dict(
+        self.shared_config = dict(
             name=name,
             N=None,
             initial_conformation=None,
             folder=folder,
         )
-        self.config['actions'] = dict()
+        self.action_configs = dict()
 
         self.action_args = dict()
         self._default_action_args = dict()
 
-    def add_action(self, action: SimAction, order=(None, None, None)):
+    def add_action(self, action: SimAction, order=(None, None, None), save_args=True):
         """
         Add an action to the constructor.
 
@@ -112,15 +111,38 @@ class SimConstructor:
         self._actions.append((order, action))
 
 
-    def _configure_action(self, action):
+    def _spawn_actions(self, action, order, order_step=1):
+        # Recursively spawn and configure child actions:
+        
+        spawned_actions = action.spawn_actions()
+        if spawned_actions:
+            n_actions = len(spawned_actions)
+            order_step = order_step / (n_actions+1)
+
+            for i, new_action in enumerate(spawned_actions):
+                new_action = new_action.rename(action.name + '_' + new_action.name)
+                if not new_action.name.startswith('_'):
+                    new_action.rename('_'+new_action.name)
+
+                new_order = (
+                    order[0]+(i+1)*order_step,
+                    order[1]+(i+1)*order_step,
+                    order[2]+(i+1)*order_step,
+                )
+
+                self.add_action(new_action, new_order)
+                self._configure_action(new_action, new_order, order_step=order_step)
+
+
+    def _configure_action(self, action, order, order_step=1):
         if _VERBOSE:
             logging.info(f"Configuring action {action.name}...")
 
-        if action.name in self.config['actions']:
+        if action.name in self.action_configs:
             raise ValueError(f"Action {action.name} has already been configured!")
 
         # Populate the dictionary of shared parameters of the action.
-        action.store_shared(self.config['shared'])
+        action.store_shared(self.shared_config)
 
         # Update the shared config.
         out_shared = action.configure()
@@ -132,28 +154,22 @@ class SimConstructor:
                 raise RuntimeError(
                     f'The action {type(action)} is expected to set shared keys '
                     f'{promised_keys}, but instead provides {provided_keys}')
-            self.config['shared'].update(out_shared)
+            self.shared_config.update(out_shared)
             action._shared.update(out_shared)
         
         # Store action configs.
-        self.config['actions'][action.name] = {
+        self.action_configs[action.name] = {
             k:copy.deepcopy(v) 
             for k,v in action.__dict__.items()
             if k not in ['_shared', 'name']
         }
 
-        # Recursively spawn and configure child actions:
-        spawned_actions = action.spawn_actions()
-        if spawned_actions:
-            for new_action in spawned_actions:
-                self.add_action(new_action)
-                self._configure_action(new_action)
-        
+        self._spawn_actions(action, order, order_step)
 
     def configure(self):
         # sorted uses a stable sorting algorithm
         for order, action in sorted(self._actions, key=lambda x: x[0][0]):
-            self.configure(action)
+            self._configure_action(action, order)
 
 
     def _run_action(self, action: SimAction, stage: str = 'init'):
@@ -197,18 +213,29 @@ class SimConstructor:
     def auto_name_folder(self, root_data_folder="./data/"):
         name = []
         for action_name, args in self.action_args.items():
+            if action_name.startswith('_'):
+                continue
             default_args = self._default_action_args.get(action_name, {})
             for k, v in args.items():
                 if k in default_args and v != default_args[k]:
-                    name += ["_", k, "-", str(v)]
+                    val_str = str(v)
+                    val_str = (val_str
+                        .replace('(', '')
+                        .replace(')', '')
+                        .replace('[', '')
+                        .replace(']', '')
+                        .replace(',', '-')
+                        .replace(' ', '-')
+                    )
+                    name += ["_", k, "-", val_str]
 
         name = "".join(name[1:])
-        self.config['shared']['name'] = name
-        self.config['shared']['folder'] = os.path.join(root_data_folder, name)
+        self.shared_config['name'] = name
+        self.shared_config['folder'] = os.path.join(root_data_folder, name)
 
 
     def save_config(self, backup=True, mode_exists='fail'):
-        folder = self.config['shared']['folder']
+        folder = self.shared_config['folder']
         if mode_exists not in ["fail", "overwrite"]:
             raise ValueError(
                 f'Unknown mode for saving configuration: {mode_exists}'
@@ -232,5 +259,6 @@ class SimConstructor:
         for path in paths:
             with shelve.open(path, protocol=2) as conf:
                 conf.clear()
-                conf['config'] = self.config
+                conf['shared_config'] = self.shared_config
+                conf['action_configs'] = self.action_configs
                 conf['action_args'] = self.action_args

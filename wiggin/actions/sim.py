@@ -4,7 +4,6 @@ import bisect
 import logging
 
 from typing import Optional, Tuple, Sequence, Union
-import dataclasses
 from dataclasses import dataclass
 
 from ..core import SimAction
@@ -116,23 +115,38 @@ class LocalEnergyMinimization(SimAction):
         )
 
 
+def _interpolate(t, ts, vals, power=1):
+    if (t < ts[0]) or (t > ts[-1]):
+        return None
+
+    step = max(0, bisect.bisect_left(ts, t) - 1)
+
+    t0, t1 = ts[step:step+2]
+
+    v0, v1 = vals[step:step+2]
+    if power == 1:
+        new_val = v0 + (v1 - v0) * ((t-t0) / (t1-t0))
+    else:
+        v0, v1 = v0 ** power, v1 ** power
+        new_val = v0 + (v1 - v0) * ((t-t0) / (t1-t0))
+        new_val = new_val ** (1/power)
+
+    return new_val
+
+
 @dataclass
-class UpdateParameter(SimAction):
+class UpdateGlobalParameter(SimAction):
     force: str = ''
     param: str = ''
-    ts: Sequence[float] = dataclasses.field(default_factory=lambda: [90, 100])
-    vals: Sequence[float] = dataclasses.field(default_factory=lambda: [0, 1.0])
+    ts: Sequence[float] = (90, 100)
+    vals: Sequence[float] = (0, 1.0)
     power: float = 1.0
 
     def run_loop(self, sim):
-        t = sim.block
-        ts = self.ts
+        new_val = _interpolate(t=sim.block, ts=self.ts, vals=self.vals, power=self.power)
 
-        if (ts[0] < t) or (t > ts[-1]):
+        if new_val is None:
             return
-
-        vals = self.vals
-        power = self.vals
 
         if self.force:
             param_full_name = f'{self.force}_{self.param}'
@@ -140,17 +154,67 @@ class UpdateParameter(SimAction):
             param_full_name = self.param
 
         cur_val = sim.context.getParameter(param_full_name)
-
-        step = max(0, bisect.bisect_left(ts, t) - 1)
-
-        t0, t1 = ts[step:step+2]
-        v0, v1 = vals[step:step+2]
-
-        new_val = v1 + (v0 - v1) * (((t0-t) / (t0-t1)) ** power)
-
+        
         if cur_val != new_val:
             logging.info(f"set {param_full_name} to {new_val}")
             sim.context.setParameter(param_full_name, new_val)
+
+
+@dataclass
+class UpdatePerParticleParameter(SimAction):
+    force: str = ''
+    parameter_name: str = ''
+    term_index: Optional[int] = None
+    particle_index: Optional[int] = None
+    ts: Sequence[float] = (90, 100)
+    vals: Sequence[float] = (0, 1.0)
+    power: float = 1.0
+
+    def configure(self):
+        if (self.particle_index is None) == (self.term_index is None):
+            raise ValueError('Provide either a particle index or a term index')
+        return {}
+
+    def run_loop(self, sim):
+        new_val = _interpolate(t=sim.block, ts=self.ts, vals=self.vals, power=self.power)
+
+        if new_val is None:
+            return
+
+        force_obj = sim.force_dict[self.force]
+
+        param_index = [
+            force_obj.getPerParticleParameterName(i)
+            for i in range(force_obj.getNumPerParticleParameters())
+            ].index(self.parameter_name)
+        
+        if self.term_index is None:
+            params = [
+                force_obj.getParticleParameters(self, i)
+                for i in range(force_obj.getNumParticles())
+            ]
+            particle_index = self.particle_index
+            term_index, particle_params = [
+                i for i in params if i[0] == particle_index]
+        else:
+            term_index = self.term_index
+            particle_index, particle_params = force_obj.getParticleParameters(term_index)
+
+        cur_val = particle_params[param_index]
+
+        if cur_val == new_val:
+            return
+
+        particle_params = list(particle_params)
+        particle_params[param_index] = new_val
+        particle_params = tuple(particle_params)
+
+        force_obj.setParticleParameters(
+            term_index, particle_index, particle_params)
+        force_obj.updateParametersInContext(sim.context)
+
+        logging.info(f"set {self.parameter_name} of force {self.force} to {new_val}")
+
 
 
 # move to methods of the SimulationConstructor

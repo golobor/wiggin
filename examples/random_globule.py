@@ -52,7 +52,8 @@ c.auto_name_folder(root_data_folder='./data/random_globule/')
 
 c.configure()
 
-pprint.pprint(c.config)
+pprint.pprint(c.shared_config)
+pprint.pprint(c.action_configs)
 
 c.save_config()
 
