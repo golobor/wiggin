@@ -195,13 +195,17 @@ class SimConstructor:
 
     def run_init(self):
         for order, action in sorted(self._actions, key=lambda x: x[0][1]):
-            self._run_action(action, stage='init')
+            res = self._run_action(action, stage='init')
+            if res == False: 
+                return
 
 
     def run_loop(self):
         while True:
             for order, action in sorted(self._actions, key=lambda x: x[0][2]):
-                self._run_action(action, stage='loop')
+                res = self._run_action(action, stage='loop')
+                if res == False:
+                    return
 
 
     def run(self):
