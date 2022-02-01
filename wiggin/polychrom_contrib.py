@@ -212,7 +212,7 @@ def contact_vs_dist(
 
     assert np.sum(contacts[:, 1] < contacts[:, 0]) == 0
 
-    cvd = _bin_contacts(contacts, N, bins_decade=10, bins=None, ring=False)
+    cvd = _bin_contacts(contacts, N, bins_decade=bins_decade, bins=bins, ring=ring)
 
     return cvd
 
@@ -324,9 +324,11 @@ def cached_contact_vs_dist(
     bins_decade=10,
     bins=None,
     ring=False,
+    particle_slice=(0,None),
     random_sigma=None,
     random_reps=10,
     cache_file=SCALING_CACHE_FILENAME,
+    
 ):
 
     if random_sigma is None:
@@ -346,6 +348,7 @@ def cached_contact_vs_dist(
         "ring",
         "random_sigma",
         "random_reps",
+        "particle_slice"
     ]:
         key_dict[k] = locals()[k]
 
@@ -359,6 +362,7 @@ def cached_contact_vs_dist(
         return cache_f[key]
 
     coords = fetch_block(folder, block_idx)
+    coords = coords[particle_slice[0]:particle_slice[-1]]
     sc = gaussian_contact_vs_dist(
         coords,
         contact_vs_dist_func=contact_vs_dist,
