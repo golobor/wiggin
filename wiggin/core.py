@@ -22,7 +22,7 @@ def _get_dataclass_defaults(dc):
     elif not isinstance(dc.__class__, type):
         dc = dc.__class__
     out = {}
-    for k,v in dc.__dataclass_fields__.items():
+    for k, v in dc.__dataclass_fields__.items():
         if not isinstance(v.default, dataclasses._MISSING_TYPE):
             out[k] = v.default
         elif not isinstance(v.default_factory, dataclasses._MISSING_TYPE):
@@ -61,6 +61,7 @@ class SimAction:
 
     # def run_loop(self, sim):
     #     pass
+
 
 class SimConstructor:
     def __init__(self, name=None, folder=None):
@@ -110,7 +111,6 @@ class SimConstructor:
 
         self._actions.append((order, action))
 
-
     def _spawn_actions(self, action, order, order_step=1):
         # Recursively spawn and configure child actions:
         
@@ -132,7 +132,6 @@ class SimConstructor:
 
                 self.add_action(new_action, new_order)
                 self._configure_action(new_action, new_order, order_step=order_step)
-
 
     def _configure_action(self, action, order, order_step=1):
         if _VERBOSE:
@@ -159,8 +158,8 @@ class SimConstructor:
         
         # Store action configs.
         self.action_configs[action.name] = {
-            k:copy.deepcopy(v) 
-            for k,v in action.__dict__.items()
+            k: copy.deepcopy(v) 
+            for k, v in action.__dict__.items()
             if k not in ['_shared', 'name']
         }
 
@@ -170,7 +169,6 @@ class SimConstructor:
         # sorted uses a stable sorting algorithm
         for order, action in sorted(self._actions, key=lambda x: x[0][0]):
             self._configure_action(action, order)
-
 
     def _run_action(self, action: SimAction, stage: str = 'init'):
         run_f_name = f'run_{stage}'
@@ -192,27 +190,23 @@ class SimConstructor:
                 "Allowed values are: polychrom.simulation.Simulation, None or False"
             )
         
-
     def run_init(self):
         for order, action in sorted(self._actions, key=lambda x: x[0][1]):
             res = self._run_action(action, stage='init')
-            if res == False: 
+            if res is False: 
                 return
-
 
     def run_loop(self):
         while True:
             for order, action in sorted(self._actions, key=lambda x: x[0][2]):
                 res = self._run_action(action, stage='loop')
-                if res == False:
+                if res is False:
                     return
-
 
     def run(self):
         self.configure()
         self.run_init()
         self.run_loop()
-        
 
     def auto_name_folder(self, root_data_folder="./data/"):
         name = []
